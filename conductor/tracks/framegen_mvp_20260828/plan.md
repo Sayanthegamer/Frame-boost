@@ -13,9 +13,9 @@
 - [x] Task: Write Tests for Matrix Reprojection & Unprojection 9f0508c
   - [x] Unit tests for NDC-to-World unprojection via inverse view-projection matrix (Red Phase)
   - [x] Unit tests for World-to-Previous-Clip reprojection and camera motion deltas (Red Phase)
-- [~] Task: Implement Camera Matrix Tracker
-  - [ ] Implement `CameraMatrixTracker` caching current/previous View & Projection matrices (Green Phase)
-  - [ ] Implement matrix interpolation and delta calculation for intermediate frame ($t = 0.5$)
+- [x] Task: Implement Camera Matrix Tracker 6b5f1b5
+  - [x] Implement `CameraMatrixTracker` caching current/previous View & Projection matrices (Green Phase)
+  - [x] Implement matrix interpolation and delta calculation for intermediate frame ($t = 0.5$)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Frame Capture Subsystem & FBO Management
