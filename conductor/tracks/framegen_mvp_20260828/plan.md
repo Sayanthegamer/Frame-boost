@@ -10,10 +10,10 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Matrix Mathematics & Reprojection Engine
-- [ ] Task: Write Tests for Matrix Reprojection & Unprojection
-  - [ ] Unit tests for NDC-to-World unprojection via inverse view-projection matrix (Red Phase)
-  - [ ] Unit tests for World-to-Previous-Clip reprojection and camera motion deltas (Red Phase)
-- [ ] Task: Implement Camera Matrix Tracker
+- [x] Task: Write Tests for Matrix Reprojection & Unprojection 9f0508c
+  - [x] Unit tests for NDC-to-World unprojection via inverse view-projection matrix (Red Phase)
+  - [x] Unit tests for World-to-Previous-Clip reprojection and camera motion deltas (Red Phase)
+- [~] Task: Implement Camera Matrix Tracker
   - [ ] Implement `CameraMatrixTracker` caching current/previous View & Projection matrices (Green Phase)
   - [ ] Implement matrix interpolation and delta calculation for intermediate frame ($t = 0.5$)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
