@@ -18,13 +18,13 @@
   - [x] Implement matrix interpolation and delta calculation for intermediate frame ($t = 0.5$)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
-## Phase 3: Frame Capture Subsystem & FBO Management
+## Phase 3: Frame Capture Subsystem & FBO Management [checkpoint: b3b4d77]
 - [x] Task: Write Tests & Scaffold Frame Capture Buffer Lifecycle 7fb86b9
   - [x] Unit tests for RenderTarget lifecycle, resize events, and buffer swapping (Red Phase)
 - [x] Task: Implement `FrameCaptureManager` b3b4d77
   - [x] Implement dual persistent `RenderTarget` buffers (`currentFrameFBO`, `previousFrameFBO`)
   - [x] Implement color buffer copy and non-linear depth texture capture before HUD pass (Green Phase)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: GLSL Reprojection Shader & Post-Processing Pass
 - [ ] Task: Define Shader Pipeline & Uniform Bindings
