@@ -21,9 +21,9 @@
 ## Phase 3: Frame Capture Subsystem & FBO Management
 - [x] Task: Write Tests & Scaffold Frame Capture Buffer Lifecycle 7fb86b9
   - [x] Unit tests for RenderTarget lifecycle, resize events, and buffer swapping (Red Phase)
-- [~] Task: Implement `FrameCaptureManager`
-  - [ ] Implement dual persistent `RenderTarget` buffers (`currentFrameFBO`, `previousFrameFBO`)
-  - [ ] Implement color buffer copy and non-linear depth texture capture before HUD pass (Green Phase)
+- [x] Task: Implement `FrameCaptureManager` b3b4d77
+  - [x] Implement dual persistent `RenderTarget` buffers (`currentFrameFBO`, `previousFrameFBO`)
+  - [x] Implement color buffer copy and non-linear depth texture capture before HUD pass (Green Phase)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: GLSL Reprojection Shader & Post-Processing Pass
