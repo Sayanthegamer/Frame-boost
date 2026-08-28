@@ -1,0 +1,3 @@
+Task: Write Tests for Matrix Reprojection & Unprojection
+Summary: Created MatrixMathTest and CameraMatrixTrackerTest covering NDC-to-World unprojection, World-to-Previous-Clip reprojection, camera matrix tracking, and intermediate frame camera interpolation.
+Files: MatrixMathTest.java, CameraMatrixTrackerTest.java
