@@ -94,6 +94,7 @@ public class FrameCaptureManager {
                             width, height
                     );
                 }
+                encoder.submit();
             }
         } catch (Throwable t) {
             LOGGER.error("Error capturing current frame textures", t);
