@@ -1,0 +1,3 @@
+Task: Write Tests & Scaffold Frame Capture Buffer Lifecycle
+Summary: Created FrameCaptureManagerTest to validate buffer dimensions, resize handling, frame advance and swapping, and lifecycle reset.
+Files: FrameCaptureManagerTest.java
