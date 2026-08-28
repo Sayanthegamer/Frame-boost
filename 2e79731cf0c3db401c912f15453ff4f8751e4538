@@ -1,0 +1,3 @@
+Task: Implement Config & Keybinding Subsystem
+Summary: Implemented FrameGenConfig for JSON serialization, default validation, and runtime toggle state. Added KeybindingHandler with toggle keymapping and client overlay notification. Created unit tests with 100% pass rate.
+Files: FrameGenConfig.java, KeybindingHandler.java, FrameGenConfigTest.java, FrameGenClient.java, en_us.json
