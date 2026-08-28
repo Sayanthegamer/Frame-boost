@@ -9,14 +9,14 @@
   - [x] Implement `FrameGenConfig` and keybinding registration (Green Phase)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
-## Phase 2: Matrix Mathematics & Reprojection Engine
+## Phase 2: Matrix Mathematics & Reprojection Engine [checkpoint: 6b5f1b5]
 - [x] Task: Write Tests for Matrix Reprojection & Unprojection 9f0508c
   - [x] Unit tests for NDC-to-World unprojection via inverse view-projection matrix (Red Phase)
   - [x] Unit tests for World-to-Previous-Clip reprojection and camera motion deltas (Red Phase)
 - [x] Task: Implement Camera Matrix Tracker 6b5f1b5
   - [x] Implement `CameraMatrixTracker` caching current/previous View & Projection matrices (Green Phase)
   - [x] Implement matrix interpolation and delta calculation for intermediate frame ($t = 0.5$)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Frame Capture Subsystem & FBO Management
 - [ ] Task: Write Tests & Scaffold Frame Capture Buffer Lifecycle
