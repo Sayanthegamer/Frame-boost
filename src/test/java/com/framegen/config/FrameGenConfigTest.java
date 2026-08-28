@@ -1,0 +1,79 @@
+package com.framegen.config;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class FrameGenConfigTest {
+
+    @Test
+    void testDefaultValues() {
+        FrameGenConfig config = new FrameGenConfig();
+        assertThat(config.isEnabled()).isTrue();
+        assertThat(config.getInterpolationFactor()).isEqualTo(0.5f);
+        assertThat(config.isDebugOverlayEnabled()).isTrue();
+        assertThat(config.getDepthDilationRadius()).isEqualTo(1.0f);
+    }
+
+    @Test
+    void testToggleEnabled() {
+        FrameGenConfig config = new FrameGenConfig();
+        assertThat(config.isEnabled()).isTrue();
+        boolean newState = config.toggleEnabled();
+        assertThat(newState).isFalse();
+        assertThat(config.isEnabled()).isFalse();
+        
+        newState = config.toggleEnabled();
+        assertThat(newState).isTrue();
+        assertThat(config.isEnabled()).isTrue();
+    }
+
+    @Test
+    void testValidationAndClamping() {
+        FrameGenConfig config = new FrameGenConfig();
+        config.setInterpolationFactor(-0.5f);
+        assertThat(config.getInterpolationFactor()).isEqualTo(0.0f);
+
+        config.setInterpolationFactor(1.5f);
+        assertThat(config.getInterpolationFactor()).isEqualTo(1.0f);
+
+        config.setDepthDilationRadius(-2.0f);
+        assertThat(config.getDepthDilationRadius()).isEqualTo(0.0f);
+
+        config.setDepthDilationRadius(10.0f);
+        assertThat(config.getDepthDilationRadius()).isEqualTo(5.0f);
+    }
+
+    @Test
+    void testJsonSerializationAndDeserialization(@TempDir Path tempDir) throws IOException {
+        Path configFile = tempDir.resolve("framegen.json");
+        FrameGenConfig original = new FrameGenConfig();
+        original.setEnabled(false);
+        original.setInterpolationFactor(0.5f);
+        original.setDebugOverlayEnabled(false);
+        original.setDepthDilationRadius(2.0f);
+
+        FrameGenConfig.save(original, configFile);
+        assertThat(Files.exists(configFile)).isTrue();
+
+        FrameGenConfig loaded = FrameGenConfig.load(configFile);
+        assertThat(loaded.isEnabled()).isFalse();
+        assertThat(loaded.getInterpolationFactor()).isEqualTo(0.5f);
+        assertThat(loaded.isDebugOverlayEnabled()).isFalse();
+        assertThat(loaded.getDepthDilationRadius()).isEqualTo(2.0f);
+    }
+
+    @Test
+    void testLoadNonExistentFileReturnsDefaultsAndCreatesFile(@TempDir Path tempDir) {
+        Path configFile = tempDir.resolve("framegen_nonexistent.json");
+        FrameGenConfig loaded = FrameGenConfig.load(configFile);
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.isEnabled()).isTrue();
+        assertThat(Files.exists(configFile)).isTrue();
+    }
+}
