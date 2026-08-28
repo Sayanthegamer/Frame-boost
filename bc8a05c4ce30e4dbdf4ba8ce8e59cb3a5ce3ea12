@@ -1,0 +1,3 @@
+Task: Implement reproject.vsh and reproject.fsh
+Summary: Implemented OpenGL 3.3+ vertex shader for fullscreen blit quad and fragment shader with depth unprojection, camera reprojection warp, 3x3 depth-dilation, 3x3 color neighborhood AABB clamping, and intermediate frame blending. Added ReprojectionShaderPass for program compilation and uniform uploads.
+Files: reproject.vsh, reproject.fsh, ReprojectionShaderPass.java, ShaderConstants.java
