@@ -4,9 +4,9 @@
 - [x] Task: Initialize Fabric Mod Scaffold 0fa333e
   - [x] Configure `build.gradle`, `settings.gradle`, `gradle.properties` (Java 25, Fabric Loom, MC 26.2, Fabric API, JOML)
   - [x] Configure `fabric.mod.json` and `framegen.mixins.json`
-- [ ] Task: Implement Config & Keybinding Subsystem
-  - [ ] Write unit tests for JSON config serialization, default validation, and toggle state (Red Phase)
-  - [ ] Implement `FrameGenConfig` and keybinding registration (Green Phase)
+- [x] Task: Implement Config & Keybinding Subsystem 2e79731
+  - [x] Write unit tests for JSON config serialization, default validation, and toggle state (Red Phase)
+  - [x] Implement `FrameGenConfig` and keybinding registration (Green Phase)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Matrix Mathematics & Reprojection Engine
