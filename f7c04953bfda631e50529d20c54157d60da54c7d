@@ -1,0 +1,3 @@
+Task: Define Shader Pipeline & Uniform Bindings
+Summary: Created ShaderUniformLayoutTest defining shader uniform variable names and sampler texture units for current/previous color and depth buffers.
+Files: ShaderUniformLayoutTest.java
