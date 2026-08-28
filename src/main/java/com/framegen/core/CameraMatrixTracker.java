@@ -23,7 +23,16 @@ public class CameraMatrixTracker {
     private boolean hasPreviousFrame = false;
     private boolean initialized = false;
 
+    private static CameraMatrixTracker INSTANCE;
+
     public CameraMatrixTracker() {
+    }
+
+    public static synchronized CameraMatrixTracker getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new CameraMatrixTracker();
+        }
+        return INSTANCE;
     }
 
     public synchronized void updateMatrices(Matrix4f viewMatrix, Matrix4f projectionMatrix, double camX, double camY, double camZ) {
