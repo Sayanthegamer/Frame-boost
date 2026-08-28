@@ -36,11 +36,11 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 5: Pipeline Hooks, Frame Pacing & End-to-End Presentation
-- [ ] Task: Implement `GameRendererMixin` Interception
-  - [ ] Hook `GameRenderer.render()` immediately prior to HUD drawing to capture 3D scene buffers
-- [ ] Task: Implement `FramePacer` Presentation Engine
-  - [ ] Regulate presentation timing between base engine frames and generated intermediate frames
-  - [ ] Ensure `InGameHud` is rendered independently on top of both engine and generated frames
-- [ ] Task: Implement F3 Debug Overlay Telemetry
-  - [ ] Display engine FPS, effective 2x FPS, and reprojection time in debug screen
+- [x] Task: Implement `GameRendererMixin` Interception 8875f38
+  - [x] Hook `GameRenderer.render()` immediately prior to HUD drawing to capture 3D scene buffers
+- [x] Task: Implement `FramePacer` Presentation Engine 8875f38
+  - [x] Regulate presentation timing between base engine frames and generated intermediate frames
+  - [x] Ensure `InGameHud` is rendered independently on top of both engine and generated frames
+- [x] Task: Implement F3 Debug Overlay Telemetry 8875f38
+  - [x] Display engine FPS, effective 2x FPS, and reprojection time in debug screen
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
