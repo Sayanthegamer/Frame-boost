@@ -1,0 +1,3 @@
+Task: Implement FrameCaptureManager
+Summary: Implemented FrameCaptureManager managing persistent current, previous, and intermediate RenderTarget buffers with automatic window dimension synchronization, non-linear depth texture copy, and buffer swapping.
+Files: FrameCaptureManager.java
