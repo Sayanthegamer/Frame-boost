@@ -69,13 +69,15 @@ public class FramePacer {
         try {
             TextureTarget currentFBO = captureManager.getCurrentFrameFBO();
             TextureTarget previousFBO = captureManager.getPreviousFrameFBO();
+            TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
 
-            if (currentFBO != null && previousFBO != null) {
+            if (currentFBO != null && previousFBO != null && intermediateFBO != null) {
                 shaderPass.render(
                         currentFBO.getColorTexture(),
                         previousFBO.getColorTexture(),
                         currentFBO.getDepthTexture(),
                         previousFBO.getDepthTexture(),
+                        intermediateFBO.getColorTexture(),
                         matrixTracker.getReprojectionMatrix(),
                         mainTarget.width,
                         mainTarget.height,

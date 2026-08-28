@@ -22,9 +22,73 @@ import java.util.stream.Collectors;
 public class ReprojectionShaderPass {
     private static final Logger LOGGER = LoggerFactory.getLogger("ReprojectionShaderPass");
 
+    private static final String DEFAULT_VSH = """
+        #version 330 core
+        layout (location = 0) in vec2 Position;
+        layout (location = 1) in vec2 UV;
+        out vec2 texCoord;
+        void main() {
+            texCoord = UV;
+            gl_Position = vec4(Position, 0.0, 1.0);
+        }
+        """;
+
+    private static final String DEFAULT_FSH = """
+        #version 330 core
+        in vec2 texCoord;
+        out vec4 fragColor;
+        uniform sampler2D CurrentColorSampler;
+        uniform sampler2D PreviousColorSampler;
+        uniform sampler2D CurrentDepthSampler;
+        uniform sampler2D PreviousDepthSampler;
+        uniform mat4 ReprojectionMatrix;
+        uniform vec2 ScreenSize;
+        uniform float BlendFactor;
+        uniform float DepthDilationRadius;
+        void main() {
+            vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
+            float closestDepth = texture(CurrentDepthSampler, texCoord).r;
+            if (DepthDilationRadius > 0.0) {
+                for (int y = -1; y <= 1; ++y) {
+                    for (int x = -1; x <= 1; ++x) {
+                        vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
+                        float d = texture(CurrentDepthSampler, texCoord + offset).r;
+                        closestDepth = min(closestDepth, d);
+                    }
+                }
+            }
+            float zNDC = closestDepth * 2.0 - 1.0;
+            vec4 currClip = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
+            vec4 prevClip = ReprojectionMatrix * currClip;
+            vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
+            vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
+            vec4 currColor = texture(CurrentColorSampler, texCoord);
+            vec4 minColor = currColor;
+            vec4 maxColor = currColor;
+            for (int y = -1; y <= 1; ++y) {
+                for (int x = -1; x <= 1; ++x) {
+                    vec2 offset = vec2(float(x), float(y)) * texelSize;
+                    vec4 neighbor = texture(CurrentColorSampler, texCoord + offset);
+                    minColor = min(minColor, neighbor);
+                    maxColor = max(maxColor, neighbor);
+                }
+            }
+            bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
+            vec4 prevColor;
+            if (validUV) {
+                vec4 rawPrev = texture(PreviousColorSampler, prevUV);
+                prevColor = clamp(rawPrev, minColor, maxColor);
+            } else {
+                prevColor = currColor;
+            }
+            fragColor = mix(currColor, prevColor, BlendFactor);
+        }
+        """;
+
     private int programId = 0;
     private int vaoId = 0;
     private int vboId = 0;
+    private int fboId = 0;
     private boolean initialized = false;
 
     // Uniform locations
@@ -46,8 +110,8 @@ public class ReprojectionShaderPass {
         if (initialized) return;
 
         try {
-            String vshSource = loadShaderResource("/assets/framegen/shaders/reproject.vsh");
-            String fshSource = loadShaderResource("/assets/framegen/shaders/reproject.fsh");
+            String vshSource = loadShaderResource("/assets/framegen/shaders/reproject.vsh", DEFAULT_VSH);
+            String fshSource = loadShaderResource("/assets/framegen/shaders/reproject.fsh", DEFAULT_FSH);
 
             int vsh = compileShader(GL20.GL_VERTEX_SHADER, vshSource);
             int fsh = compileShader(GL20.GL_FRAGMENT_SHADER, fshSource);
@@ -76,6 +140,7 @@ public class ReprojectionShaderPass {
             uDepthDilation = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEPTH_DILATION);
 
             setupFullscreenQuad();
+            fboId = GL30.glGenFramebuffers();
             initialized = true;
             LOGGER.info("ReprojectionShaderPass initialized successfully.");
         } catch (Throwable t) {
@@ -85,7 +150,6 @@ public class ReprojectionShaderPass {
     }
 
     private void setupFullscreenQuad() {
-        // Vertex data: [posX, posY, u, v]
         float[] quadVertices = {
                 -1.0f, -1.0f,  0.0f, 0.0f,
                  1.0f, -1.0f,  1.0f, 0.0f,
@@ -105,11 +169,9 @@ public class ReprojectionShaderPass {
         buffer.put(quadVertices).flip();
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
 
-        // Position: location 0, size 2, stride 4 * 4, offset 0
         GL20.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 0);
         GL20.glEnableVertexAttribArray(0);
 
-        // UV: location 1, size 2, stride 4 * 4, offset 2 * 4
         GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES);
         GL20.glEnableVertexAttribArray(1);
 
@@ -121,6 +183,7 @@ public class ReprojectionShaderPass {
             GpuTexture previousColor,
             GpuTexture currentDepth,
             GpuTexture previousDepth,
+            GpuTexture outputColor,
             Matrix4f reprojectMatrix,
             int width,
             int height,
@@ -131,6 +194,14 @@ public class ReprojectionShaderPass {
             initialize();
             if (!initialized) return;
         }
+
+        int targetTexId = getGlTextureId(outputColor != null ? outputColor : currentColor);
+        if (targetTexId == 0) return;
+
+        // Bind destination FBO
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
+        GL11.glViewport(0, 0, width, height);
 
         GL20.glUseProgram(programId);
 
@@ -165,6 +236,7 @@ public class ReprojectionShaderPass {
         GL30.glBindVertexArray(0);
 
         GL20.glUseProgram(0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
     }
 
     private void bindTexture(int textureUnit, GpuTexture texture, int uniformLocation, int unitIndex) {
@@ -196,17 +268,21 @@ public class ReprojectionShaderPass {
         return shader;
     }
 
-    private String loadShaderResource(String path) {
-        try (InputStream in = getClass().getResourceAsStream(path)) {
+    private String loadShaderResource(String path, String fallback) {
+        try {
+            InputStream in = getClass().getResourceAsStream(path);
             if (in == null) {
-                throw new IllegalArgumentException("Shader resource not found: " + path);
+                in = ReprojectionShaderPass.class.getClassLoader().getResourceAsStream(path.startsWith("/") ? path.substring(1) : path);
             }
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                return reader.lines().collect(Collectors.joining("\n"));
+            if (in != null) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    return reader.lines().collect(Collectors.joining("\n"));
+                }
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read shader resource: " + path, e);
+            LOGGER.warn("Failed to load shader resource from {}, using built-in fallback: {}", path, e.getMessage());
         }
+        return fallback;
     }
 
     public synchronized void destroy() {
@@ -222,6 +298,10 @@ public class ReprojectionShaderPass {
             GL30.glDeleteVertexArrays(vaoId);
             vaoId = 0;
         }
+        if (fboId != 0) {
+            GL30.glDeleteFramebuffers(fboId);
+            fboId = 0;
+        }
         initialized = false;
     }
 
@@ -229,3 +309,4 @@ public class ReprojectionShaderPass {
         return initialized;
     }
 }
+

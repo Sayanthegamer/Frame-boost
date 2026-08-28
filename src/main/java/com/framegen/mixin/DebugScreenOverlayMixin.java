@@ -19,7 +19,10 @@ public abstract class DebugScreenOverlayMixin {
         if (left) {
             FrameGenConfig config = FrameGenConfig.getInstance();
             if (config.isDebugOverlayEnabled()) {
-                list.add(FramePacer.getInstance().getTelemetryString(config.isEnabled()));
+                String telemetry = FramePacer.getInstance().getTelemetryString(config.isEnabled());
+                if (!list.contains(telemetry)) {
+                    list.add(telemetry);
+                }
             }
         }
     }
