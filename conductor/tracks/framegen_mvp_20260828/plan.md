@@ -27,9 +27,9 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: GLSL Reprojection Shader & Post-Processing Pass
-- [ ] Task: Define Shader Pipeline & Uniform Bindings
-  - [ ] Unit tests for shader uniform layout, quad vertex format, and blend factors (Red Phase)
-- [ ] Task: Implement `reproject.vsh` and `reproject.fsh`
+- [x] Task: Define Shader Pipeline & Uniform Bindings f7c0495
+  - [x] Unit tests for shader uniform layout, quad vertex format, and blend factors (Red Phase)
+- [~] Task: Implement `reproject.vsh` and `reproject.fsh`
   - [ ] Write GLSL vertex shader for fullscreen blit quad
   - [ ] Write GLSL fragment shader with depth unprojection, reprojection warp, depth-dilation, and color clamping (Green Phase)
   - [ ] Implement `ReprojectionShaderPass` managing shader lifecycle and uniform uploads
