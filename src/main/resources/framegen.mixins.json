@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "GameRendererMixin",
-    "DebugScreenOverlayMixin"
+    "DebugScreenOverlayMixin",
+    "MinecraftMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -5,6 +5,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTexture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,13 +54,15 @@ public class FrameCaptureManager {
         }
     }
 
+    private GpuTexture lastDepthTexture;
+
     private void recreateBuffers() {
         destroyBuffers();
 
         try {
-            currentFrameFBO = new TextureTarget("framegen_current", width, height, true, GpuFormat.RGBA8_UNORM);
-            previousFrameFBO = new TextureTarget("framegen_previous", width, height, true, GpuFormat.RGBA8_UNORM);
-            intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, true, GpuFormat.RGBA8_UNORM);
+            currentFrameFBO = new TextureTarget("framegen_current", width, height, false, GpuFormat.RGBA8_UNORM);
+            previousFrameFBO = new TextureTarget("framegen_previous", width, height, false, GpuFormat.RGBA8_UNORM);
+            intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
         } catch (Throwable t) {
             LOGGER.error("Failed to allocate FrameCaptureManager RenderTargets", t);
         }
@@ -83,18 +86,8 @@ public class FrameCaptureManager {
                         0, 0,
                         width, height
                 );
-
-                if (sourceTarget.getDepthTexture() != null && currentFrameFBO.getDepthTexture() != null) {
-                    encoder.copyTextureToTexture(
-                            sourceTarget.getDepthTexture(),
-                            currentFrameFBO.getDepthTexture(),
-                            0,
-                            0, 0,
-                            0, 0,
-                            width, height
-                    );
-                }
                 encoder.submit();
+                this.lastDepthTexture = sourceTarget.getDepthTexture();
             }
         } catch (Throwable t) {
             LOGGER.error("Error capturing current frame textures", t);
@@ -173,5 +166,9 @@ public class FrameCaptureManager {
 
     public TextureTarget getIntermediateFrameFBO() {
         return intermediateFrameFBO;
+    }
+
+    public com.mojang.blaze3d.textures.GpuTexture getLastDepthTexture() {
+        return lastDepthTexture;
     }
 }
