@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "framegen",
+  "version": "${version}",
+  "name": "Universal Frame Generation (2x)",
+  "description": "Hardware-agnostic 2x Frame Generation for Minecraft Java Edition using camera reprojection.",
+  "authors": [
+    "Antigravity"
+  ],
+  "contact": {
+    "homepage": "https://github.com/example/mlss-framegen"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.framegen.FrameGenClient"
+    ]
+  },
+  "mixins": [
+    "framegen.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
