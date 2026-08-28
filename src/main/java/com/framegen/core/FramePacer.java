@@ -97,12 +97,15 @@ public class FramePacer {
         if (!isEnabled) {
             return "§6[FrameGen 2x]§r Status: §cDISABLED§r";
         }
+        String timeStr = reprojectionTimeMs < 0.01
+                ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
+                : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%.2f ms§r | Status: §aACTIVE§r",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Status: §aACTIVE§r",
                 baseFps,
                 effectiveFps,
-                reprojectionTimeMs
+                timeStr
         );
     }
 
