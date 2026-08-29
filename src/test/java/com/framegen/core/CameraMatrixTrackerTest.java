@@ -36,29 +36,36 @@ class CameraMatrixTrackerTest {
 
     @Test
     void testSecondFrameEnablesReprojection() {
-        Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
-        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0);
+        // Minecraft uses camera-relative rotation matrices (centered at origin)
+        Matrix4f rotView1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        tracker.updateMatrices(rotView1, proj, 0.0, 0.0, 0.0);
 
-        Matrix4f view2 = new Matrix4f().lookAt(1, 0, 0, 1, 0, -1, 0, 1, 0);
-        tracker.updateMatrices(view2, proj, 1.0, 0.0, 0.0);
+        Matrix4f rotView2 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        // Camera translates right by +1 unit in world space
+        tracker.updateMatrices(rotView2, proj, 1.0, 0.0, 0.0);
 
         assertThat(tracker.hasPreviousFrame()).isTrue();
-        assertThat(tracker.getPreviousViewMatrix()).isEqualTo(view1);
-        assertThat(tracker.getCurrentViewMatrix()).isEqualTo(view2);
+        assertThat(tracker.getPreviousViewMatrix()).isEqualTo(rotView1);
+        assertThat(tracker.getCurrentViewMatrix()).isEqualTo(rotView2);
 
         Matrix4f reproject = tracker.getReprojectionMatrix();
         assertThat(reproject).isNotNull();
 
-        // Reproject a point
-        Vector4f worldPoint = new Vector4f(0, 0, -5.0f, 1.0f);
+        // In current frame (camera at x=1), a world point at (0, 0, -5) is at camera-relative (-1, 0, -5)
+        Vector4f cam2RelPoint = new Vector4f(-1.0f, 0.0f, -5.0f, 1.0f);
         Vector4f currClip = new Vector4f();
-        new Matrix4f(proj).mul(view2).transform(worldPoint, currClip);
+        new Matrix4f(proj).mul(rotView2).transform(cam2RelPoint, currClip);
         Vector4f currNDC = new Vector4f(currClip.x / currClip.w, currClip.y / currClip.w, currClip.z / currClip.w, 1.0f);
 
+        // Point is to the left in current frame's screen space
+        assertThat(currNDC.x).isLessThan(0.0f);
+
+        // Reproject current NDC into previous frame
         Vector4f reprojectedClip = new Vector4f();
         reproject.transform(currNDC, reprojectedClip);
         float reprojectedNDCX = reprojectedClip.x / reprojectedClip.w;
 
+        // In previous frame (camera at x=0), the point at (0, 0, -5) was directly in front (ndcX = 0)
         assertThat(reprojectedNDCX).isCloseTo(0.0f, within(1e-4f));
     }
 

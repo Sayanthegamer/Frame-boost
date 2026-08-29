@@ -61,7 +61,15 @@ public class CameraMatrixTracker {
         initialized = true;
 
         if (hasPreviousFrame) {
-            reprojectionMatrix.set(previousViewProjectionMatrix).mul(currentInvViewProjectionMatrix);
+            float deltaX = (float) (currentCamX - previousCamX);
+            float deltaY = (float) (currentCamY - previousCamY);
+            float deltaZ = (float) (currentCamZ - previousCamZ);
+
+            Matrix4f camTranslation = new Matrix4f().translation(deltaX, deltaY, deltaZ);
+            reprojectionMatrix.set(previousViewProjectionMatrix)
+                    .mul(camTranslation)
+                    .mul(currentInvViewProjectionMatrix);
+
             if (!reprojectionMatrix.isFinite()) {
                 reprojectionMatrix.identity();
             }
