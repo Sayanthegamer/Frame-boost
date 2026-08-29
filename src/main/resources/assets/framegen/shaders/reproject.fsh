@@ -19,8 +19,8 @@ void main() {
     // 1. Depth sampling with 3x3 dilation (pick closest depth to prevent foreground ghosting)
     float closestDepth = texture(CurrentDepthSampler, texCoord).r;
 
-    // Fast-path: Sky / infinite background at far plane requires no reprojection
-    if (closestDepth >= 0.9999) {
+    // Fast-path: Sky / infinite background in Reverse-Z is depth 0.0 (requires no reprojection)
+    if (closestDepth <= 0.0001) {
         fragColor = texture(CurrentColorSampler, texCoord);
         return;
     }
@@ -30,13 +30,15 @@ void main() {
             for (int x = -1; x <= 1; ++x) {
                 vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
                 float d = texture(CurrentDepthSampler, texCoord + offset).r;
-                closestDepth = min(closestDepth, d);
+                // In Reverse-Z, closer foreground objects have LARGER depth values
+                closestDepth = max(closestDepth, d);
             }
         }
     }
 
     // 2. Unproject from NDC using the precomputed ReprojectionMatrix (PrevVP * CurrInvVP)
-    float zNDC = closestDepth * 2.0 - 1.0;
+    // Reverse-Z: depth 1.0 (near) -> zNDC -1.0, depth 0.0 (far) -> zNDC +1.0
+    float zNDC = 1.0 - closestDepth * 2.0;
     vec4 currClip = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
 
     vec4 prevClip = ReprojectionMatrix * currClip;

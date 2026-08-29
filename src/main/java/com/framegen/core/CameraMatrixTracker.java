@@ -51,6 +51,10 @@ public class CameraMatrixTracker {
         currentViewProjectionMatrix.set(projectionMatrix).mul(viewMatrix);
         currentInvViewProjectionMatrix.set(currentViewProjectionMatrix).invert();
 
+        if (!currentInvViewProjectionMatrix.isFinite()) {
+            currentInvViewProjectionMatrix.identity();
+        }
+
         currentCamX = camX;
         currentCamY = camY;
         currentCamZ = camZ;
@@ -58,6 +62,9 @@ public class CameraMatrixTracker {
 
         if (hasPreviousFrame) {
             reprojectionMatrix.set(previousViewProjectionMatrix).mul(currentInvViewProjectionMatrix);
+            if (!reprojectionMatrix.isFinite()) {
+                reprojectionMatrix.identity();
+            }
         }
     }
 
