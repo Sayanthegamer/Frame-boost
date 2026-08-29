@@ -69,7 +69,7 @@ public class FrameCaptureManager {
     }
 
     public synchronized void captureCurrentFrame(RenderTarget sourceTarget) {
-        if (sourceTarget == null || width <= 0 || height <= 0) {
+        if (sourceTarget == null || sourceTarget.width <= 0 || sourceTarget.height <= 0) {
             return;
         }
 

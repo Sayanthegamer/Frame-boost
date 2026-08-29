@@ -20,10 +20,11 @@ public abstract class MinecraftMixin {
             method = "renderFrame",
             at = @At(
                     value = "INVOKE",
-                    target = "Lcom/mojang/blaze3d/systems/GpuSurface;blitFromTexture(Lcom/mojang/blaze3d/systems/CommandEncoder;Lcom/mojang/blaze3d/textures/GpuTextureView;)V"
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V",
+                    shift = At.Shift.AFTER
             )
     )
-    private void framegen$onBlitMainFrame(boolean renderLevel, CallbackInfo ci) {
+    private void framegen$onAfterGameRendererRender(boolean renderLevel, CallbackInfo ci) {
         if (FramePacer.getInstance().presentIntermediateFrame(this.windowSurface)) {
             this.frames++;
         }
