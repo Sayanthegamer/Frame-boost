@@ -18,11 +18,11 @@
     - [x] Document system requirements, controls (`G` toggle, `H` indicator), and config format (b1efcfe)
     - [x] Document build instructions (`./gradlew build`) and installation steps (b1efcfe)
     - [x] Add contributing and bug reporting guidelines (b1efcfe)
-- [ ] Task: Create GitHub Actions CI Workflow (`.github/workflows/build.yml`)
-    - [ ] Setup workflow for push and PR on `main` branch
-    - [ ] Configure JDK 25 and Gradle wrapper validation
-    - [ ] Add build and test step (`./gradlew check test build`)
-    - [ ] Add artifact archiving for generated mod JARs
+- [x] Task: Create GitHub Actions CI Workflow (`.github/workflows/build.yml`) (7f0afa6)
+    - [x] Setup workflow for push and PR on `main` branch (7f0afa6)
+    - [x] Configure JDK 25 and Gradle wrapper validation (7f0afa6)
+    - [x] Add build and test step (`./gradlew check test build`) (7f0afa6)
+    - [x] Add artifact archiving for generated mod JARs (7f0afa6)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
     - [ ] Verify YAML syntax, documentation format, and run local test suite
 
