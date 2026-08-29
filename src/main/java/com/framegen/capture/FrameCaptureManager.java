@@ -17,6 +17,7 @@ public class FrameCaptureManager {
     private TextureTarget currentFrameFBO;
     private TextureTarget previousFrameFBO;
     private TextureTarget intermediateFrameFBO;
+    private TextureTarget hudCompositeFBO;
 
     private int width = 0;
     private int height = 0;
@@ -63,6 +64,7 @@ public class FrameCaptureManager {
             currentFrameFBO = new TextureTarget("framegen_current", width, height, true, GpuFormat.RGBA8_UNORM);
             previousFrameFBO = new TextureTarget("framegen_previous", width, height, true, GpuFormat.RGBA8_UNORM);
             intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
+            hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, false, GpuFormat.RGBA8_UNORM);
         } catch (Throwable t) {
             LOGGER.error("Failed to allocate FrameCaptureManager RenderTargets", t);
         }
@@ -146,6 +148,10 @@ public class FrameCaptureManager {
             try { intermediateFrameFBO.destroyBuffers(); } catch (Throwable ignored) {}
             intermediateFrameFBO = null;
         }
+        if (hudCompositeFBO != null) {
+            try { hudCompositeFBO.destroyBuffers(); } catch (Throwable ignored) {}
+            hudCompositeFBO = null;
+        }
     }
 
     public int getWidth() {
@@ -178,6 +184,10 @@ public class FrameCaptureManager {
 
     public TextureTarget getIntermediateFrameFBO() {
         return intermediateFrameFBO;
+    }
+
+    public TextureTarget getHudCompositeFBO() {
+        return hudCompositeFBO;
     }
 
     public com.mojang.blaze3d.textures.GpuTexture getLastDepthTexture() {

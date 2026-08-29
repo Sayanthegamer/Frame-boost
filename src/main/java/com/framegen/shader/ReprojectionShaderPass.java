@@ -85,13 +85,31 @@ public class ReprojectionShaderPass {
         }
         """;
 
+    private static final String DEFAULT_HUD_FSH = """
+        #version 330 core
+        in vec2 texCoord;
+        out vec4 fragColor;
+        uniform sampler2D IntermediateSampler;
+        uniform sampler2D MainColorSampler;
+        uniform sampler2D WorldOnlySampler;
+        void main() {
+            vec4 interColor = texture(IntermediateSampler, texCoord);
+            vec4 mainColor = texture(MainColorSampler, texCoord);
+            vec4 worldColor = texture(WorldOnlySampler, texCoord);
+            vec3 diff = abs(mainColor.rgb - worldColor.rgb);
+            float isHud = step(0.005, max(diff.r, max(diff.g, diff.b)));
+            fragColor = mix(interColor, mainColor, isHud);
+        }
+        """;
+
     private int programId = 0;
+    private int hudProgramId = 0;
     private int vaoId = 0;
     private int vboId = 0;
     private int fboId = 0;
     private boolean initialized = false;
 
-    // Uniform locations
+    // Uniform locations - Reprojection
     private int uCurrentColor = -1;
     private int uPreviousColor = -1;
     private int uCurrentDepth = -1;
@@ -100,6 +118,11 @@ public class ReprojectionShaderPass {
     private int uScreenSize = -1;
     private int uBlendFactor = -1;
     private int uDepthDilation = -1;
+
+    // Uniform locations - HUD Composite
+    private int uHudIntermediate = -1;
+    private int uHudMain = -1;
+    private int uHudWorldOnly = -1;
 
     private final FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
 
@@ -126,10 +149,19 @@ public class ReprojectionShaderPass {
                 throw new RuntimeException("Failed to link reprojection shader program: " + log);
             }
 
-            GL20.glDeleteShader(vsh);
             GL20.glDeleteShader(fsh);
 
-            // Query uniform locations
+            // Compile HUD Composite Shader
+            int hudFsh = compileShader(GL20.GL_FRAGMENT_SHADER, DEFAULT_HUD_FSH);
+            hudProgramId = GL20.glCreateProgram();
+            GL20.glAttachShader(hudProgramId, vsh);
+            GL20.glAttachShader(hudProgramId, hudFsh);
+            GL20.glLinkProgram(hudProgramId);
+
+            GL20.glDeleteShader(vsh);
+            GL20.glDeleteShader(hudFsh);
+
+            // Query uniform locations - Reprojection
             uCurrentColor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_CURRENT_COLOR);
             uPreviousColor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_PREVIOUS_COLOR);
             uCurrentDepth = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_CURRENT_DEPTH);
@@ -139,10 +171,15 @@ public class ReprojectionShaderPass {
             uBlendFactor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_BLEND_FACTOR);
             uDepthDilation = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEPTH_DILATION);
 
+            // Query uniform locations - HUD Composite
+            uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, "IntermediateSampler");
+            uHudMain = GL20.glGetUniformLocation(hudProgramId, "MainColorSampler");
+            uHudWorldOnly = GL20.glGetUniformLocation(hudProgramId, "WorldOnlySampler");
+
             setupFullscreenQuad();
             fboId = GL30.glGenFramebuffers();
             initialized = true;
-            LOGGER.info("ReprojectionShaderPass initialized successfully.");
+            LOGGER.info("ReprojectionShaderPass and HUD Composite Shader initialized successfully.");
         } catch (Throwable t) {
             LOGGER.error("Failed to initialize ReprojectionShaderPass", t);
             destroy();
@@ -239,6 +276,40 @@ public class ReprojectionShaderPass {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
     }
 
+    public synchronized void compositeHud(
+            GpuTexture intermediateTexture,
+            GpuTexture mainTextureWithHud,
+            GpuTexture worldTextureOnly,
+            GpuTexture outputTexture,
+            int width,
+            int height
+    ) {
+        if (!initialized) {
+            initialize();
+            if (!initialized) return;
+        }
+
+        int targetTexId = getGlTextureId(outputTexture != null ? outputTexture : intermediateTexture);
+        if (targetTexId == 0) return;
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
+        GL11.glViewport(0, 0, width, height);
+
+        GL20.glUseProgram(hudProgramId);
+
+        bindTexture(GL13.GL_TEXTURE0, intermediateTexture, uHudIntermediate, 0);
+        bindTexture(GL13.GL_TEXTURE1, mainTextureWithHud, uHudMain, 1);
+        bindTexture(GL13.GL_TEXTURE2, worldTextureOnly, uHudWorldOnly, 2);
+
+        GL30.glBindVertexArray(vaoId);
+        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
+        GL30.glBindVertexArray(0);
+
+        GL20.glUseProgram(0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+    }
+
     private void bindTexture(int textureUnit, GpuTexture texture, int uniformLocation, int unitIndex) {
         if (texture != null && uniformLocation != -1) {
             GL13.glActiveTexture(textureUnit);
@@ -289,6 +360,10 @@ public class ReprojectionShaderPass {
         if (programId != 0) {
             GL20.glDeleteProgram(programId);
             programId = 0;
+        }
+        if (hudProgramId != 0) {
+            GL20.glDeleteProgram(hudProgramId);
+            hudProgramId = 0;
         }
         if (vboId != 0) {
             GL15.glDeleteBuffers(vboId);

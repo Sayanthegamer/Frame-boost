@@ -17,6 +17,7 @@ public class FramePacer {
     private final ReprojectionShaderPass shaderPass = new ReprojectionShaderPass();
 
     private long lastFrameNanoTime = 0;
+    private long lastFrameDurationNanos = 0;
     private double baseFps = 0.0;
     private double effectiveFps = 0.0;
     private double reprojectionTimeMs = 0.0;
@@ -33,6 +34,7 @@ public class FramePacer {
 
     public synchronized void recordBaseFrame(long frameDurationNanos) {
         if (frameDurationNanos > 0) {
+            this.lastFrameDurationNanos = frameDurationNanos;
             double fps = 1_000_000_000.0 / (double) frameDurationNanos;
             // Exponential moving average for smooth display
             if (this.baseFps == 0.0) {
@@ -93,7 +95,7 @@ public class FramePacer {
         }
     }
 
-    public boolean presentIntermediateFrame(com.mojang.blaze3d.systems.GpuSurface windowSurface) {
+    public boolean presentIntermediateFrame(com.mojang.blaze3d.systems.GpuSurface windowSurface, RenderTarget mainTarget) {
         FrameGenConfig config = FrameGenConfig.getInstance();
         FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
 
@@ -102,16 +104,49 @@ public class FramePacer {
         }
 
         TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
+        TextureTarget currentFBO = captureManager.getCurrentFrameFBO();
+        TextureTarget hudFBO = captureManager.getHudCompositeFBO();
+
         if (intermediateFBO == null || intermediateFBO.getColorTextureView() == null) {
             return false;
         }
 
         try {
+            TextureTarget targetToPresent = intermediateFBO;
+
+            // Composite HUD onto intermediate frame to eliminate UI flickering
+            if (hudFBO != null && mainTarget != null && currentFBO != null &&
+                    mainTarget.getColorTexture() != null && currentFBO.getColorTexture() != null) {
+                shaderPass.compositeHud(
+                        intermediateFBO.getColorTexture(),
+                        mainTarget.getColorTexture(),
+                        currentFBO.getColorTexture(),
+                        hudFBO.getColorTexture(),
+                        mainTarget.width,
+                        mainTarget.height
+                );
+                targetToPresent = hudFBO;
+            }
+
             com.mojang.blaze3d.systems.CommandEncoder encoder = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder();
-            windowSurface.blitFromTexture(encoder, intermediateFBO.getColorTextureView());
+            windowSurface.blitFromTexture(encoder, targetToPresent.getColorTextureView());
             encoder.submit();
             windowSurface.present();
             windowSurface.acquireNextTexture();
+
+            // Precision frame pacing: pace half of the base frame interval to eliminate scanline tearing
+            long halfIntervalNanos = this.lastFrameDurationNanos / 2;
+            if (halfIntervalNanos > 1_000_000 && halfIntervalNanos < 40_000_000) {
+                long deadline = System.nanoTime() + halfIntervalNanos - 300_000;
+                long sleepNanos = deadline - System.nanoTime();
+                if (sleepNanos > 2_000_000) {
+                    java.util.concurrent.locks.LockSupport.parkNanos(sleepNanos - 1_000_000);
+                }
+                while (System.nanoTime() < deadline) {
+                    Thread.onSpinWait();
+                }
+            }
+
             return true;
         } catch (Throwable t) {
             LOGGER.error("Error presenting intermediate frame to display surface", t);
