@@ -5,6 +5,7 @@
 - **Build System:** Gradle with Fabric Loom
 - **Mod Loader:** Fabric Loader
 - **Target Platform:** Minecraft Java Edition 26.2 (Official Mojang Mappings)
+- **CI / CD:** GitHub Actions (Java 25 Temurin, Gradle Build & Check, Artifact Upload)
 
 ## Graphics & Rendering Architecture
 - **Rendering Engine:** Mojang Blaze3D (`com.mojang.blaze3d.pipeline.RenderTarget`)
