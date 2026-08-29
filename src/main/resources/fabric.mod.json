@@ -2,13 +2,15 @@
   "schemaVersion": 1,
   "id": "framegen",
   "version": "${version}",
-  "name": "Universal Frame Generation (2x)",
-  "description": "Hardware-agnostic 2x Frame Generation for Minecraft Java Edition using camera reprojection.",
+  "name": "Frame Boost (2x Frame Generation)",
+  "description": "Hardware-agnostic 2x Frame Generation for Minecraft Java Edition using camera matrix reprojection and depth unprojection.",
   "authors": [
-    "Antigravity"
+    "Sayanthegamer"
   ],
   "contact": {
-    "homepage": "https://github.com/example/mlss-framegen"
+    "homepage": "https://github.com/Sayanthegamer/Frame-boost",
+    "sources": "https://github.com/Sayanthegamer/Frame-boost",
+    "issues": "https://github.com/Sayanthegamer/Frame-boost/issues"
   },
   "license": "MIT",
   "environment": "client",
