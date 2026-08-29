@@ -1,14 +1,38 @@
+# Gradle build artifacts & cache
 .gradle/
 build/
-bin/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Fabric Loom & Minecraft run files
+.loom/
+.fabric/
 run/
-out/
+logs/
+crash-reports/
+
+# IDE & Editor files
 .idea/
 *.iml
 *.ipr
 *.iws
+.vscode/
+.settings/
 .project
 .classpath
-.settings/
+bin/
+out/
+
+# Operating System Files
 .DS_Store
-logs/
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak
+*.swp
+*~
+
+# Java Crash & Temporary logs
+*.class
+hs_err_pid*
+replay_pid*
