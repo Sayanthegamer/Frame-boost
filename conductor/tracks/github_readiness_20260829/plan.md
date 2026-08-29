@@ -12,12 +12,12 @@
     - [x] Verify file integrity and run `./gradlew test` (55a8532)
 
 ## Phase 2: Documentation & CI/CD Pipeline
-- [ ] Task: Create Comprehensive `README.md`
-    - [ ] Add project badges (Build, Fabric, Minecraft 26.2, Java 25, MIT License)
-    - [ ] Write detailed description of the 2x Reprojection Frame Generation Engine
-    - [ ] Document system requirements, controls (`G` toggle, `H` indicator), and config format
-    - [ ] Document build instructions (`./gradlew build`) and installation steps
-    - [ ] Add contributing and bug reporting guidelines
+- [x] Task: Create Comprehensive `README.md` (b1efcfe)
+    - [x] Add project badges (Build, Fabric, Minecraft 26.2, Java 25, MIT License) (b1efcfe)
+    - [x] Write detailed description of the 2x Reprojection Frame Generation Engine (b1efcfe)
+    - [x] Document system requirements, controls (`G` toggle, `H` indicator), and config format (b1efcfe)
+    - [x] Document build instructions (`./gradlew build`) and installation steps (b1efcfe)
+    - [x] Add contributing and bug reporting guidelines (b1efcfe)
 - [ ] Task: Create GitHub Actions CI Workflow (`.github/workflows/build.yml`)
     - [ ] Setup workflow for push and PR on `main` branch
     - [ ] Configure JDK 25 and Gradle wrapper validation
