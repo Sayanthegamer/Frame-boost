@@ -44,7 +44,6 @@ public abstract class GameRendererMixin {
                 captureManager.captureCurrentFrame(this.mainRenderTarget);
 
                 FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
-                captureManager.advanceFrame();
             }
         }
     }

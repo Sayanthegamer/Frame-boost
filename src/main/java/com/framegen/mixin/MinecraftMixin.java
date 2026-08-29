@@ -30,5 +30,6 @@ public abstract class MinecraftMixin {
         if (FramePacer.getInstance().presentIntermediateFrame(this.windowSurface, mainTarget)) {
             this.frames++;
         }
+        com.framegen.capture.FrameCaptureManager.getInstance().advanceFrame();
     }
 }
