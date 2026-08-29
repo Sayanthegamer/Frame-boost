@@ -1,0 +1,5 @@
+Task: Create GitHub Actions CI Workflow (.github/workflows/build.yml)
+
+Summary:
+- Added GitHub Actions workflow running on ubuntu-latest.
+- Configured Gradle wrapper validation, JDK 25 Temurin setup, ./gradlew check test build execution, and JAR artifact upload.
