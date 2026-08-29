@@ -1,6 +1,6 @@
 # Implementation Plan: GitHub Readiness & Remote Push (`github_readiness`)
 
-## Phase 1: Project Metadata, Hygiene & Licensing
+## Phase 1: Project Metadata, Hygiene & Licensing [checkpoint: 55a8532]
 - [x] Task: Update `.gitignore` with comprehensive Gradle, Loom, OS, and IDE ignore patterns (1105fee)
     - [x] Update `.gitignore` with standard Fabric Loom, Gradle daemon, OS caches, and IDE ignore rules (1105fee)
 - [x] Task: Create MIT License (`LICENSE`) (160b4ea)
@@ -8,8 +8,8 @@
 - [x] Task: Update `src/main/resources/fabric.mod.json` Metadata (55a8532)
     - [x] Set mod author to `Sayanthegamer` (55a8532)
     - [x] Update `contact` block with `homepage`, `sources`, and `issues` URLs pointing to `https://github.com/Sayanthegamer/Frame-boost` (55a8532)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
-    - [ ] Verify file integrity and run `./gradlew test`
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) (55a8532)
+    - [x] Verify file integrity and run `./gradlew test` (55a8532)
 
 ## Phase 2: Documentation & CI/CD Pipeline
 - [ ] Task: Create Comprehensive `README.md`
