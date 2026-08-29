@@ -5,9 +5,9 @@
     - [x] Update `.gitignore` with standard Fabric Loom, Gradle daemon, OS caches, and IDE ignore rules (1105fee)
 - [x] Task: Create MIT License (`LICENSE`) (160b4ea)
     - [x] Add MIT License text attributing copyright to `Sayanthegamer` (2026) (160b4ea)
-- [ ] Task: Update `src/main/resources/fabric.mod.json` Metadata
-    - [ ] Set mod author to `Sayanthegamer`
-    - [ ] Update `contact` block with `homepage`, `sources`, and `issues` URLs pointing to `https://github.com/Sayanthegamer/Frame-boost`
+- [x] Task: Update `src/main/resources/fabric.mod.json` Metadata (55a8532)
+    - [x] Set mod author to `Sayanthegamer` (55a8532)
+    - [x] Update `contact` block with `homepage`, `sources`, and `issues` URLs pointing to `https://github.com/Sayanthegamer/Frame-boost` (55a8532)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
     - [ ] Verify file integrity and run `./gradlew test`
 
