@@ -1,8 +1,8 @@
 # Implementation Plan: GitHub Readiness & Remote Push (`github_readiness`)
 
 ## Phase 1: Project Metadata, Hygiene & Licensing
-- [ ] Task: Update `.gitignore` with comprehensive Gradle, Loom, OS, and IDE ignore patterns
-    - [ ] Update `.gitignore` with standard Fabric Loom, Gradle daemon, OS caches, and IDE ignore rules
+- [x] Task: Update `.gitignore` with comprehensive Gradle, Loom, OS, and IDE ignore patterns (1105fee)
+    - [x] Update `.gitignore` with standard Fabric Loom, Gradle daemon, OS caches, and IDE ignore rules (1105fee)
 - [ ] Task: Create MIT License (`LICENSE`)
     - [ ] Add MIT License text attributing copyright to `Sayanthegamer` (2026)
 - [ ] Task: Update `src/main/resources/fabric.mod.json` Metadata
