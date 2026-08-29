@@ -60,8 +60,8 @@ public class FrameCaptureManager {
         destroyBuffers();
 
         try {
-            currentFrameFBO = new TextureTarget("framegen_current", width, height, false, GpuFormat.RGBA8_UNORM);
-            previousFrameFBO = new TextureTarget("framegen_previous", width, height, false, GpuFormat.RGBA8_UNORM);
+            currentFrameFBO = new TextureTarget("framegen_current", width, height, true, GpuFormat.RGBA8_UNORM);
+            previousFrameFBO = new TextureTarget("framegen_previous", width, height, true, GpuFormat.RGBA8_UNORM);
             intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
         } catch (Throwable t) {
             LOGGER.error("Failed to allocate FrameCaptureManager RenderTargets", t);
@@ -86,8 +86,20 @@ public class FrameCaptureManager {
                         0, 0,
                         width, height
                 );
+
+                if (sourceTarget.getDepthTexture() != null && currentFrameFBO.getDepthTexture() != null) {
+                    encoder.copyTextureToTexture(
+                            sourceTarget.getDepthTexture(),
+                            currentFrameFBO.getDepthTexture(),
+                            0,
+                            0, 0,
+                            0, 0,
+                            width, height
+                    );
+                }
+
                 encoder.submit();
-                this.lastDepthTexture = sourceTarget.getDepthTexture();
+                this.lastDepthTexture = currentFrameFBO.getDepthTexture();
             }
         } catch (Throwable t) {
             LOGGER.error("Error capturing current frame textures", t);

@@ -75,8 +75,8 @@ public class FramePacer {
                 shaderPass.render(
                         currentFBO.getColorTexture(),
                         previousFBO.getColorTexture(),
-                        captureManager.getLastDepthTexture(),
-                        captureManager.getLastDepthTexture(),
+                        currentFBO.getDepthTexture(),
+                        previousFBO.getDepthTexture(),
                         intermediateFBO.getColorTexture(),
                         matrixTracker.getReprojectionMatrix(),
                         mainTarget.width,

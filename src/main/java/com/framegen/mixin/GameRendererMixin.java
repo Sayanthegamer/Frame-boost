@@ -23,8 +23,14 @@ public abstract class GameRendererMixin {
     @Shadow @Final private GameRenderState gameRenderState;
     @Shadow private RenderTarget mainRenderTarget;
 
-    @Inject(method = "renderLevel", at = @At("RETURN"))
-    private void framegen$onRenderLevelReturn(DeltaTracker deltaTracker, CallbackInfo ci) {
+    @Inject(
+            method = "renderLevel",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"
+            )
+    )
+    private void framegen$onBeforeClearDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (this.mainRenderTarget != null && this.gameRenderState != null && this.gameRenderState.levelRenderState != null) {
             CameraRenderState cameraState = this.gameRenderState.levelRenderState.cameraRenderState;
             if (cameraState != null && cameraState.initialized && cameraState.viewRotationMatrix != null && cameraState.projectionMatrix != null) {
