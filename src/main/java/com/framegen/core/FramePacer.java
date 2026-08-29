@@ -93,6 +93,32 @@ public class FramePacer {
         }
     }
 
+    public boolean presentIntermediateFrame(com.mojang.blaze3d.systems.GpuSurface windowSurface) {
+        FrameGenConfig config = FrameGenConfig.getInstance();
+        FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
+
+        if (!config.isEnabled() || !captureManager.hasPreviousFrame() || windowSurface == null || !windowSurface.isAcquired()) {
+            return false;
+        }
+
+        TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
+        if (intermediateFBO == null || intermediateFBO.getColorTextureView() == null) {
+            return false;
+        }
+
+        try {
+            com.mojang.blaze3d.systems.CommandEncoder encoder = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder();
+            windowSurface.blitFromTexture(encoder, intermediateFBO.getColorTextureView());
+            encoder.submit();
+            windowSurface.present();
+            windowSurface.acquireNextTexture();
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("Error presenting intermediate frame to display surface", t);
+            return false;
+        }
+    }
+
     public String getTelemetryString(boolean isEnabled) {
         if (!isEnabled) {
             return "§6[FrameGen 2x]§r Status: §cDISABLED§r";
