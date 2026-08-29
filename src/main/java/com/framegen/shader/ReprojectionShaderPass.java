@@ -48,6 +48,13 @@ public class ReprojectionShaderPass {
         void main() {
             vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
             float closestDepth = texture(CurrentDepthSampler, texCoord).r;
+
+            // Fast-path: Sky / infinite background at far plane requires no reprojection
+            if (closestDepth >= 0.9999) {
+                fragColor = texture(CurrentColorSampler, texCoord);
+                return;
+            }
+
             if (DepthDilationRadius > 0.0) {
                 for (int y = -1; y <= 1; ++y) {
                     for (int x = -1; x <= 1; ++x) {
@@ -97,7 +104,8 @@ public class ReprojectionShaderPass {
             vec4 mainColor = texture(MainColorSampler, texCoord);
             vec4 worldColor = texture(WorldOnlySampler, texCoord);
             vec3 diff = abs(mainColor.rgb - worldColor.rgb);
-            float isHud = step(0.005, max(diff.r, max(diff.g, diff.b)));
+            float maxDiff = max(diff.r, max(diff.g, diff.b));
+            float isHud = step(0.08, maxDiff);
             fragColor = mix(interColor, mainColor, isHud);
         }
         """;
@@ -315,6 +323,10 @@ public class ReprojectionShaderPass {
             GL13.glActiveTexture(textureUnit);
             int glId = getGlTextureId(texture);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, 0x812F); // GL_CLAMP_TO_EDGE
             GL20.glUniform1i(uniformLocation, unitIndex);
         }
     }

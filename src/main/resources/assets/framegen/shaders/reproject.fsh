@@ -18,6 +18,13 @@ void main() {
 
     // 1. Depth sampling with 3x3 dilation (pick closest depth to prevent foreground ghosting)
     float closestDepth = texture(CurrentDepthSampler, texCoord).r;
+
+    // Fast-path: Sky / infinite background at far plane requires no reprojection
+    if (closestDepth >= 0.9999) {
+        fragColor = texture(CurrentColorSampler, texCoord);
+        return;
+    }
+
     if (DepthDilationRadius > 0.0) {
         for (int y = -1; y <= 1; ++y) {
             for (int x = -1; x <= 1; ++x) {
