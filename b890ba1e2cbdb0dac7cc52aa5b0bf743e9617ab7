@@ -1,0 +1,5 @@
+Task: Rename Branch & Configure Git Remote
+
+Summary:
+- Renamed primary Git branch to 'main'.
+- Configured remote 'origin' to 'https://github.com/Sayanthegamer/Frame-boost.git'.
