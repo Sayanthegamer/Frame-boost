@@ -1,0 +1,5 @@
+Task: Update .gitignore with comprehensive Gradle, Loom, OS, and IDE ignore patterns
+
+Summary:
+- Added comprehensive rules for Gradle, Loom, IDEs (VSCode, IntelliJ, Eclipse), OS artifacts, and JVM logs.
+- Preserved gradle wrapper jars.
