@@ -1,0 +1,6 @@
+Task: Local Build Validation & Commit Verification
+
+Summary:
+- Executed .\gradlew clean test build with 8 tasks passing.
+- Verified mod JAR generated at build/libs/framegen-1.0.0.jar.
+- Confirmed clean git working tree.
