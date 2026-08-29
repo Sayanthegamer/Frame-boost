@@ -29,9 +29,14 @@ class FrameCaptureManagerTest {
         assertThat(captureManager.getHeight()).isEqualTo(1080);
         assertThat(captureManager.isReady()).isTrue();
 
+        captureManager.advanceFrame();
+        assertThat(captureManager.hasPreviousFrame()).isTrue();
+
+        // Resizing dimensions must invalidate previous frame to prevent presenting from blank buffers
         captureManager.ensureDimensions(2560, 1440);
         assertThat(captureManager.getWidth()).isEqualTo(2560);
         assertThat(captureManager.getHeight()).isEqualTo(1440);
+        assertThat(captureManager.hasPreviousFrame()).isFalse();
     }
 
     @Test

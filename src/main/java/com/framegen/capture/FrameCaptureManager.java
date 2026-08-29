@@ -44,6 +44,7 @@ public class FrameCaptureManager {
             this.width = targetWidth;
             this.height = targetHeight;
             this.ready = true;
+            this.hasPreviousFrame = false;
 
             try {
                 if (RenderSystem.isOnRenderThread() && RenderSystem.tryGetDevice() != null) {
@@ -59,6 +60,7 @@ public class FrameCaptureManager {
 
     private void recreateBuffers() {
         destroyBuffers();
+        this.hasPreviousFrame = false;
 
         try {
             currentFrameFBO = new TextureTarget("framegen_current", width, height, true, GpuFormat.RGBA8_UNORM);
