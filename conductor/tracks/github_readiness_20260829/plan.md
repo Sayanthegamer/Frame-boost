@@ -3,8 +3,8 @@
 ## Phase 1: Project Metadata, Hygiene & Licensing
 - [x] Task: Update `.gitignore` with comprehensive Gradle, Loom, OS, and IDE ignore patterns (1105fee)
     - [x] Update `.gitignore` with standard Fabric Loom, Gradle daemon, OS caches, and IDE ignore rules (1105fee)
-- [ ] Task: Create MIT License (`LICENSE`)
-    - [ ] Add MIT License text attributing copyright to `Sayanthegamer` (2026)
+- [x] Task: Create MIT License (`LICENSE`) (160b4ea)
+    - [x] Add MIT License text attributing copyright to `Sayanthegamer` (2026) (160b4ea)
 - [ ] Task: Update `src/main/resources/fabric.mod.json` Metadata
     - [ ] Set mod author to `Sayanthegamer`
     - [ ] Update `contact` block with `homepage`, `sources`, and `issues` URLs pointing to `https://github.com/Sayanthegamer/Frame-boost`
