@@ -27,9 +27,9 @@
     - [x] Verify YAML syntax, documentation format, and run local test suite (7f0afa6)
 
 ## Phase 3: Git Branch Alignment & Remote Push
-- [ ] Task: Rename Branch & Configure Git Remote
-    - [ ] Rename active local branch `master` to `main`
-    - [ ] Add/update git remote `origin` pointing to `https://github.com/Sayanthegamer/Frame-boost.git`
+- [x] Task: Rename Branch & Configure Git Remote (b890ba1)
+    - [x] Rename active local branch `master` to `main` (b890ba1)
+    - [x] Add/update git remote `origin` pointing to `https://github.com/Sayanthegamer/Frame-boost.git` (b890ba1)
 - [ ] Task: Local Build Validation & Commit Verification
     - [ ] Execute `./gradlew clean test build` to ensure clean reproducible build
     - [ ] Verify git log and working tree status
