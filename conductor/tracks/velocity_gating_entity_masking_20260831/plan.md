@@ -27,12 +27,12 @@
     - [x] Blend dynamic entity pixels directly from `CurrentColorSampler` at full opacity without reprojection
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [5099855]
 
-## Phase 3: Screen-Edge Disocclusion Hardening & Diagnostic Overlay
-- [ ] Task: Write shader uniform layout & edge fallback tests in `ShaderUniformLayoutTest` (Red)
-    - [ ] Test edge falloff uniform configuration and bounds checks
-- [ ] Task: Refactor `reproject.fsh` border clamping & edge disocclusion fallback (Green)
-    - [ ] Implement soft border falloff and fallback to `currColor` when reprojection coords exit $[0, 1]$ screen space
-    - [ ] Refine depth disocclusion rejection threshold
-- [ ] Task: Update `DebugScreenOverlayMixin` with angular velocity & gating telemetry (Green)
-    - [ ] Display real-time $\Delta\theta$, $\Delta d$, and Reprojection/Gated status on F3 screen
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 3: Screen-Edge Disocclusion Hardening & Diagnostic Overlay [checkpoint: ee1b016]
+- [x] Task: Write shader uniform layout & edge fallback tests in `ShaderUniformLayoutTest` (Red) [ee1b016]
+    - [x] Test edge falloff uniform configuration and bounds checks
+- [x] Task: Refactor `reproject.fsh` border clamping & edge disocclusion fallback (Green) [ee1b016]
+    - [x] Implement soft border falloff and fallback to `currColor` when reprojection coords exit $[0, 1]$ screen space
+    - [x] Refine depth disocclusion rejection threshold
+- [x] Task: Update `DebugScreenOverlayMixin` with angular velocity & gating telemetry (Green) [ee1b016]
+    - [x] Display real-time $\Delta\theta$, $\Delta d$, and Reprojection/Gated status on F3 screen
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [ee1b016]
