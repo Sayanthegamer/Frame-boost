@@ -15,17 +15,17 @@
     - [x] Integrate velocity gating check into `FramePacer` to bypass `ReprojectionShaderPass` during high-velocity frames
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [93cafd0]
 
-## Phase 2: Dynamic Entity Masking & First-Person Hand Isolation
-- [ ] Task: Write failing unit tests & layout verification for entity mask buffers in `ShaderUniformLayoutTest` and `FrameCaptureManagerTest` (Red)
-    - [ ] Validate entity mask sampler bindings and uniform definitions
-    - [ ] Verify entity mask texture format and initialization
-- [ ] Task: Implement entity / hand render hook & mask target generation in `FrameCaptureManager` & mixins (Green)
-    - [ ] Allocate `entityMaskFBO` (R8 format) in `FrameCaptureManager`
-    - [ ] Add mixin hook into entity rendering / hand rendering passes to tag dynamic pixels into mask buffer
-- [ ] Task: Update `reproject.fsh` to sample entity mask and bypass warping on dynamic pixels (Green)
-    - [ ] Add `EntityMaskSampler` uniform in `reproject.fsh`
-    - [ ] Blend dynamic entity pixels directly from `CurrentColorSampler` at full opacity without reprojection
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 2: Dynamic Entity Masking & First-Person Hand Isolation [checkpoint: 5099855]
+- [x] Task: Write failing unit tests & layout verification for entity mask buffers in `ShaderUniformLayoutTest` and `FrameCaptureManagerTest` (Red) [5099855]
+    - [x] Validate entity mask sampler bindings and uniform definitions
+    - [x] Verify entity mask texture format and initialization
+- [x] Task: Implement entity / hand render hook & mask target generation in `FrameCaptureManager` & mixins (Green) [5099855]
+    - [x] Allocate `entityMaskFBO` (R8 format) in `FrameCaptureManager`
+    - [x] Add mixin hook into entity rendering / hand rendering passes to tag dynamic pixels into mask buffer
+- [x] Task: Update `reproject.fsh` to sample entity mask and bypass warping on dynamic pixels (Green) [5099855]
+    - [x] Add `EntityMaskSampler` uniform in `reproject.fsh`
+    - [x] Blend dynamic entity pixels directly from `CurrentColorSampler` at full opacity without reprojection
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [5099855]
 
 ## Phase 3: Screen-Edge Disocclusion Hardening & Diagnostic Overlay
 - [ ] Task: Write shader uniform layout & edge fallback tests in `ShaderUniformLayoutTest` (Red)
