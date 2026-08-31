@@ -1,0 +1,5 @@
+Phase: Lag Gating, Edge Culling, and Viewmodel Pose Stack
+- Added multi-condition velocity gating with hard delta-time ceiling (delta_t > 50ms / 20 FPS) and absolute angle ceiling (delta_theta > 15 deg)
+- Added maxAbsoluteAngleThreshold and maxFrameDurationThresholdMs to FrameGenConfig
+- Added updateViewmodelPose in CameraMatrixTracker to capture PoseStack bobbing, sway, and animation transforms
+- Replaced coordinate clamping with hard screen-edge culling to eliminate barcode line stretching at viewport boundaries
