@@ -1,0 +1,5 @@
+Phase: Directional Epipolar Parallax Infill & Sharp Native Fallback
+- Calculated screen-space epipolar parallax motion vector v_motion = prevUV - texCoord
+- Sampled 3 unrolled taps along the directional parallax line dynamically scaled by DepthDilationRadius and depth discrepancy
+- Bridged 50-100px strafing disocclusion voids with 3 SIMD instructions and zero warp divergence
+- Implemented sharp native currColor fallback with continuous confidence ramp, completely eliminating 3x3 Vaseline smearing
