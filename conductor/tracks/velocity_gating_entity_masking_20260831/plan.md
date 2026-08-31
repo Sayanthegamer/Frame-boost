@@ -37,7 +37,7 @@
     - [x] Display real-time $\Delta\theta$, $\Delta d$, and Reprojection/Gated status on F3 screen
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [ee1b016]
 
-## Phase: Review Fixes [checkpoint: ccd8a5f]
+## Phase: Review Fixes [checkpoint: a5e0f03]
 - [x] Task: Apply review suggestions for viewmodel reprojection, delta-time normalized gating, and direct UV clamping [0ed494b]
 - [x] Task: Implement multi-condition lag spike gating, hard screen-edge culling, and viewmodel pose tracking [a78ef4b]
 - [x] Task: Implement spatial extrapolation inpainting at screen borders to eliminate temporal shear fracture [f9ae427]
@@ -46,3 +46,4 @@
 - [x] Task: Implement branchless 4-tap Gaussian infill with continuous confidence blending [4bfb832]
 - [x] Task: Implement Directional Epipolar Parallax Infill and Sharp Native Fallback [1d02eb0]
 - [x] Task: Implement True Background Epipolar Trajectory and Continuous Parallax Cosine Phase Damping [ccd8a5f]
+- [x] Task: Implement Pre-Hand World Background Capture and Depth-Coherent Stencil Composition [a5e0f03]
