@@ -1,0 +1,5 @@
+Task: Dynamic Entity Masking & First-Person Hand Isolation
+- Added entityMaskFBO in FrameCaptureManager
+- Added UNIFORM_ENTITY_MASK and TEXTURE_UNIT_ENTITY_MASK in ShaderConstants
+- Added EntityMaskSampler fast-path passthrough in reproject.fsh and ReprojectionShaderPass
+- Added tests in FrameCaptureManagerTest and ShaderUniformLayoutTest
