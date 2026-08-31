@@ -1,0 +1,4 @@
+Phase: Pre-Hand World Background Capture & Depth-Coherent Stencil Composition
+- Added worldOnlyFBO and captureWorldOnly in FrameCaptureManager to capture 100% complete unoccluded terrain before ItemInHandRenderer runs
+- Eliminated composite footprint black holes and weapon-shaped disocclusion voids without secondary render passes
+- Implemented Depth-Coherent Stencil Composition in reproject.fsh: dynamic mob pixels depth-test against reprojected intermediate depth, cleanly culling occluded portions behind foreground obstacles with zero bifurcation
