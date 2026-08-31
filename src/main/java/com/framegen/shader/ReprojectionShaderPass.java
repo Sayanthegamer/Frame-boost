@@ -107,16 +107,21 @@ public class ReprojectionShaderPass {
                     vec4 rawPrev = texture(PreviousColorSampler, prevUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
-                    vec2 motionVec = prevUV - texCoord;
-                    float motionLen = length(motionVec);
-                    vec2 motionDir = motionLen > 0.0001 ? motionVec / motionLen : vec2(1.0, 0.0);
+                    float zNDC_bg = 1.0 - actualPrevDepth * 2.0;
+                    vec4 bgClip = vec4(texCoord * 2.0 - 1.0, zNDC_bg, 1.0);
+                    vec4 prevBgClip = ReprojectionMatrix * bgClip;
+                    vec2 prevBgUV = (prevBgClip.xy / max(prevBgClip.w, 0.00001)) * 0.5 + 0.5;
 
-                    float parallaxScale = max(motionLen * 1.5, length(texelSize) * 2.0) * max(DepthDilationRadius, 1.0);
+                    vec2 bgMotionVec = prevBgUV - texCoord;
+                    float bgMotionLen = length(bgMotionVec);
+                    vec2 bgMotionDir = bgMotionLen > 0.0001 ? bgMotionVec / bgMotionLen : vec2(1.0, 0.0);
 
-                    vec2 uv0 = clamp(prevUV + motionDir * (parallaxScale * 0.5), 0.0, 1.0);
-                    vec2 uv1 = clamp(prevUV + motionDir * (parallaxScale * 1.0), 0.0, 1.0);
-                    vec2 uv2 = clamp(prevUV + motionDir * (parallaxScale * 2.0), 0.0, 1.0);
-                    vec2 uv3 = clamp(prevUV - motionDir * (parallaxScale * 0.5), 0.0, 1.0);
+                    float parallaxScale = max(bgMotionLen * 1.5, length(texelSize) * 2.0) * max(DepthDilationRadius, 1.0);
+
+                    vec2 uv0 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
+                    vec2 uv1 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 1.0), 0.0, 1.0);
+                    vec2 uv2 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 2.0), 0.0, 1.0);
+                    vec2 uv3 = clamp(prevBgUV - bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
 
                     float d0 = texture(PreviousDepthSampler, uv0).r;
                     float d1 = texture(PreviousDepthSampler, uv1).r;
@@ -124,10 +129,10 @@ public class ReprojectionShaderPass {
                     float d3 = texture(PreviousDepthSampler, uv3).r;
 
                     float invTwoSigmaSq = 1.0 / (2.0 * max(depthThreshold * depthThreshold * 2.25, 0.0001));
-                    float diff0 = d0 - expectedPrevDepth;
-                    float diff1 = d1 - expectedPrevDepth;
-                    float diff2 = d2 - expectedPrevDepth;
-                    float diff3 = d3 - expectedPrevDepth;
+                    float diff0 = d0 - actualPrevDepth;
+                    float diff1 = d1 - actualPrevDepth;
+                    float diff2 = d2 - actualPrevDepth;
+                    float diff3 = d3 - actualPrevDepth;
 
                     float w0 = exp(-(diff0 * diff0) * invTwoSigmaSq);
                     float w1 = exp(-(diff1 * diff1) * invTwoSigmaSq);
@@ -143,7 +148,8 @@ public class ReprojectionShaderPass {
                     vec4 infilledColor = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / max(sumWeights, 0.0001);
 
                     float confidence = clamp(sumWeights * 0.5, 0.0, 1.0);
-                    vec4 blendedPrev = mix(currColor, infilledColor, confidence);
+                    float cosineWeight = 0.5 - 0.5 * cos(3.14159265 * confidence);
+                    vec4 blendedPrev = mix(currColor, infilledColor, cosineWeight);
                     prevColor = clamp(blendedPrev, minColor, maxColor);
                 }
             } else {
