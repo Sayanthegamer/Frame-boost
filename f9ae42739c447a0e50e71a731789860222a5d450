@@ -1,0 +1,4 @@
+Phase: Spatial Extrapolation Inpaint & Viewmodel Pass Optimization
+- Implemented spatial extrapolation inpainting from clamped boundary neighbors in reproject.fsh to maintain t=0.5 temporal continuity across screen edges
+- Eliminated temporal time-shearing fracture at viewport borders
+- Prepared pipeline for native intermediate viewmodel render pass at interpolated partial tick
