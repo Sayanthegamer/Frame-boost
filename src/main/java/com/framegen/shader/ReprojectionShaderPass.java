@@ -107,7 +107,30 @@ public class ReprojectionShaderPass {
                     vec4 rawPrev = texture(PreviousColorSampler, prevUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
-                    prevColor = currColor;
+                    bool foundBackground = false;
+                    vec2 searchOffsets[8] = vec2[](
+                        vec2(-2.0, 0.0), vec2(2.0, 0.0),
+                        vec2(0.0, -2.0), vec2(0.0, 2.0),
+                        vec2(-1.5, -1.5), vec2(1.5, 1.5),
+                        vec2(-1.5, 1.5), vec2(1.5, -1.5)
+                    );
+
+                    for (int i = 0; i < 8; ++i) {
+                        vec2 sampleUV = prevUV + searchOffsets[i] * texelSize * max(DepthDilationRadius, 1.0);
+                        if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 && sampleUV.y >= 0.0 && sampleUV.y <= 1.0) {
+                            float neighborDepth = texture(PreviousDepthSampler, sampleUV).r;
+                            if (abs(neighborDepth - expectedPrevDepth) <= depthThreshold * 1.5) {
+                                vec4 bgPrev = texture(PreviousColorSampler, sampleUV);
+                                prevColor = clamp(bgPrev, minColor, maxColor);
+                                foundBackground = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!foundBackground) {
+                        prevColor = currColor;
+                    }
                 }
             } else {
                 prevColor = currColor;
