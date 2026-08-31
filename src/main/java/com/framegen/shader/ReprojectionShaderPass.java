@@ -107,30 +107,45 @@ public class ReprojectionShaderPass {
                     vec4 rawPrev = texture(PreviousColorSampler, prevUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
-                    bool foundBackground = false;
-                    vec2 searchOffsets[8] = vec2[](
-                        vec2(-2.0, 0.0), vec2(2.0, 0.0),
-                        vec2(0.0, -2.0), vec2(0.0, 2.0),
-                        vec2(-1.5, -1.5), vec2(1.5, 1.5),
-                        vec2(-1.5, 1.5), vec2(1.5, -1.5)
-                    );
+                    float radius = max(DepthDilationRadius, 1.0);
+                    vec2 o0 = vec2(-1.5, 0.0) * texelSize * radius;
+                    vec2 o1 = vec2( 1.5, 0.0) * texelSize * radius;
+                    vec2 o2 = vec2(0.0, -1.5) * texelSize * radius;
+                    vec2 o3 = vec2(0.0,  1.5) * texelSize * radius;
 
-                    for (int i = 0; i < 8; ++i) {
-                        vec2 sampleUV = prevUV + searchOffsets[i] * texelSize * max(DepthDilationRadius, 1.0);
-                        if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 && sampleUV.y >= 0.0 && sampleUV.y <= 1.0) {
-                            float neighborDepth = texture(PreviousDepthSampler, sampleUV).r;
-                            if (abs(neighborDepth - expectedPrevDepth) <= depthThreshold * 1.5) {
-                                vec4 bgPrev = texture(PreviousColorSampler, sampleUV);
-                                prevColor = clamp(bgPrev, minColor, maxColor);
-                                foundBackground = true;
-                                break;
-                            }
-                        }
-                    }
+                    vec2 uv0 = clamp(prevUV + o0, 0.0, 1.0);
+                    vec2 uv1 = clamp(prevUV + o1, 0.0, 1.0);
+                    vec2 uv2 = clamp(prevUV + o2, 0.0, 1.0);
+                    vec2 uv3 = clamp(prevUV + o3, 0.0, 1.0);
 
-                    if (!foundBackground) {
-                        prevColor = currColor;
-                    }
+                    float d0 = texture(PreviousDepthSampler, uv0).r;
+                    float d1 = texture(PreviousDepthSampler, uv1).r;
+                    float d2 = texture(PreviousDepthSampler, uv2).r;
+                    float d3 = texture(PreviousDepthSampler, uv3).r;
+
+                    float invTwoSigmaSq = 1.0 / (2.0 * max(depthThreshold * depthThreshold * 2.25, 0.0001));
+                    float diff0 = d0 - expectedPrevDepth;
+                    float diff1 = d1 - expectedPrevDepth;
+                    float diff2 = d2 - expectedPrevDepth;
+                    float diff3 = d3 - expectedPrevDepth;
+
+                    float w0 = exp(-(diff0 * diff0) * invTwoSigmaSq);
+                    float w1 = exp(-(diff1 * diff1) * invTwoSigmaSq);
+                    float w2 = exp(-(diff2 * diff2) * invTwoSigmaSq);
+                    float w3 = exp(-(diff3 * diff3) * invTwoSigmaSq);
+
+                    vec4 c0 = texture(PreviousColorSampler, uv0);
+                    vec4 c1 = texture(PreviousColorSampler, uv1);
+                    vec4 c2 = texture(PreviousColorSampler, uv2);
+                    vec4 c3 = texture(PreviousColorSampler, uv3);
+
+                    float sumWeights = w0 + w1 + w2 + w3;
+                    vec4 infilledColor = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / max(sumWeights, 0.0001);
+
+                    vec4 neighborhoodAvg = (minColor + maxColor) * 0.5;
+                    float confidence = clamp(sumWeights * 0.5, 0.0, 1.0);
+                    vec4 blendedPrev = mix(neighborhoodAvg, infilledColor, confidence);
+                    prevColor = clamp(blendedPrev, minColor, maxColor);
                 }
             } else {
                 prevColor = currColor;
