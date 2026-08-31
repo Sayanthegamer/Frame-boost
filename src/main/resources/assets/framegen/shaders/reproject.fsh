@@ -87,17 +87,18 @@ void main() {
             vec4 rawPrev = texture(PreviousColorSampler, prevUV);
             prevColor = clamp(rawPrev, minColor, maxColor);
         } else {
-            // Parallax Disocclusion: Branchless 4-tap cross kernel with Gaussian depth weighting (Zero warp divergence)
-            float radius = max(DepthDilationRadius, 1.0);
-            vec2 o0 = vec2(-1.5, 0.0) * texelSize * radius;
-            vec2 o1 = vec2( 1.5, 0.0) * texelSize * radius;
-            vec2 o2 = vec2(0.0, -1.5) * texelSize * radius;
-            vec2 o3 = vec2(0.0,  1.5) * texelSize * radius;
+            // Parallax Disocclusion: Directional Epipolar Parallax Infill (Bridges 50-100px strafing voids)
+            vec2 motionVec = prevUV - texCoord;
+            float motionLen = length(motionVec);
+            vec2 motionDir = motionLen > 0.0001 ? motionVec / motionLen : vec2(1.0, 0.0);
 
-            vec2 uv0 = clamp(prevUV + o0, 0.0, 1.0);
-            vec2 uv1 = clamp(prevUV + o1, 0.0, 1.0);
-            vec2 uv2 = clamp(prevUV + o2, 0.0, 1.0);
-            vec2 uv3 = clamp(prevUV + o3, 0.0, 1.0);
+            // Dynamically scale along motion line proportional to depth discrepancy & dilation radius
+            float parallaxScale = max(motionLen * 1.5, length(texelSize) * 2.0) * max(DepthDilationRadius, 1.0);
+
+            vec2 uv0 = clamp(prevUV + motionDir * (parallaxScale * 0.5), 0.0, 1.0);
+            vec2 uv1 = clamp(prevUV + motionDir * (parallaxScale * 1.0), 0.0, 1.0);
+            vec2 uv2 = clamp(prevUV + motionDir * (parallaxScale * 2.0), 0.0, 1.0);
+            vec2 uv3 = clamp(prevUV - motionDir * (parallaxScale * 0.5), 0.0, 1.0);
 
             float d0 = texture(PreviousDepthSampler, uv0).r;
             float d1 = texture(PreviousDepthSampler, uv1).r;
@@ -123,10 +124,9 @@ void main() {
             float sumWeights = w0 + w1 + w2 + w3;
             vec4 infilledColor = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / max(sumWeights, 0.0001);
 
-            // Continuous Neighborhood Confidence Blending (No hard shear tear on thin high-parallax voids)
-            vec4 neighborhoodAvg = (minColor + maxColor) * 0.5;
+            // Sharp Native Fallback (No 3x3 Vaseline blur on unbridgeable voids)
             float confidence = clamp(sumWeights * 0.5, 0.0, 1.0);
-            vec4 blendedPrev = mix(neighborhoodAvg, infilledColor, confidence);
+            vec4 blendedPrev = mix(currColor, infilledColor, confidence);
             prevColor = clamp(blendedPrev, minColor, maxColor);
         }
     } else {
