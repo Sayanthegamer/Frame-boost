@@ -107,12 +107,10 @@ public class ReprojectionShaderPass {
                     vec4 rawPrev = texture(PreviousColorSampler, prevUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
-                    prevColor = clamp(currColor, minColor, maxColor);
+                    prevColor = currColor;
                 }
             } else {
-                vec2 clampedUV = clamp(prevUV, 0.001, 0.999);
-                vec4 neighborPrev = texture(PreviousColorSampler, clampedUV);
-                prevColor = clamp(neighborPrev, minColor, maxColor);
+                prevColor = currColor;
             }
             fragColor = mix(currColor, prevColor, BlendFactor);
         }

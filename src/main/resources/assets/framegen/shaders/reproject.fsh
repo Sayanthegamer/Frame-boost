@@ -71,7 +71,7 @@ void main() {
         }
     }
 
-    // 3. Sample previous frame with spatial extrapolation inpainting & depth disocclusion rejection
+    // 3. Sample previous frame with strict sub-pixel border rejection & depth disocclusion validation
     bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
     vec4 prevColor = currColor;
 
@@ -87,14 +87,12 @@ void main() {
             vec4 rawPrev = texture(PreviousColorSampler, prevUV);
             prevColor = clamp(rawPrev, minColor, maxColor);
         } else {
-            // Disoccluded geometry: inpaint using local neighborhood color average at t=0.5
-            prevColor = clamp(currColor, minColor, maxColor);
+            // Disoccluded geometry: clean fallback to current color
+            prevColor = currColor;
         }
     } else {
-        // Spatial Extrapolation Inpaint: Extrapolate boundary color from clamped neighbor to prevent temporal shear fracture
-        vec2 clampedUV = clamp(prevUV, 0.001, 0.999);
-        vec4 neighborPrev = texture(PreviousColorSampler, clampedUV);
-        prevColor = clamp(neighborPrev, minColor, maxColor);
+        // Out of viewport bounds: Strict sub-pixel rejection (no streak dragging or barcode stretching)
+        prevColor = currColor;
     }
 
     // 4. Synthesize intermediate frame (t = BlendFactor)
