@@ -19,6 +19,7 @@ public class FrameCaptureManager {
     private TextureTarget intermediateFrameFBO;
     private TextureTarget hudCompositeFBO;
     private TextureTarget entityMaskFBO;
+    private TextureTarget worldOnlyFBO;
 
     private int width = 0;
     private int height = 0;
@@ -69,8 +70,46 @@ public class FrameCaptureManager {
             intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
             hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, false, GpuFormat.RGBA8_UNORM);
             entityMaskFBO = new TextureTarget("framegen_entity_mask", width, height, false, GpuFormat.RGBA8_UNORM);
+            worldOnlyFBO = new TextureTarget("framegen_world_only", width, height, true, GpuFormat.RGBA8_UNORM);
         } catch (Throwable t) {
             LOGGER.error("Failed to allocate FrameCaptureManager RenderTargets", t);
+        }
+    }
+
+    public synchronized void captureWorldOnly(RenderTarget sourceTarget) {
+        if (sourceTarget == null || sourceTarget.width <= 0 || sourceTarget.height <= 0) {
+            return;
+        }
+
+        ensureDimensions(sourceTarget.width, sourceTarget.height);
+
+        try {
+            if (worldOnlyFBO != null && sourceTarget.getColorTexture() != null && worldOnlyFBO.getColorTexture() != null) {
+                CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+                encoder.copyTextureToTexture(
+                        sourceTarget.getColorTexture(),
+                        worldOnlyFBO.getColorTexture(),
+                        0,
+                        0, 0,
+                        0, 0,
+                        width, height
+                );
+
+                if (sourceTarget.getDepthTexture() != null && worldOnlyFBO.getDepthTexture() != null) {
+                    encoder.copyTextureToTexture(
+                            sourceTarget.getDepthTexture(),
+                            worldOnlyFBO.getDepthTexture(),
+                            0,
+                            0, 0,
+                            0, 0,
+                            width, height
+                    );
+                }
+
+                encoder.submit();
+            }
+        } catch (Throwable t) {
+            LOGGER.error("Error capturing unoccluded world background textures", t);
         }
     }
 
@@ -160,6 +199,10 @@ public class FrameCaptureManager {
             try { entityMaskFBO.destroyBuffers(); } catch (Throwable ignored) {}
             entityMaskFBO = null;
         }
+        if (worldOnlyFBO != null) {
+            try { worldOnlyFBO.destroyBuffers(); } catch (Throwable ignored) {}
+            worldOnlyFBO = null;
+        }
     }
 
     public int getWidth() {
@@ -200,6 +243,10 @@ public class FrameCaptureManager {
 
     public TextureTarget getEntityMaskFBO() {
         return entityMaskFBO;
+    }
+
+    public TextureTarget getWorldOnlyFBO() {
+        return worldOnlyFBO;
     }
 
     public com.mojang.blaze3d.textures.GpuTexture getLastDepthTexture() {

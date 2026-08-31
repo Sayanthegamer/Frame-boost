@@ -61,11 +61,6 @@ public class ReprojectionShaderPass {
             bool isViewmodel = (maskSample.g > 0.5) || (maskSample.r > 0.5 && closestDepth > 0.95);
             bool isDynamicMob = (maskSample.r > 0.5 && !isViewmodel);
 
-            if (isDynamicMob) {
-                fragColor = texture(CurrentColorSampler, texCoord);
-                return;
-            }
-
             if (!isViewmodel && DepthDilationRadius > 0.0) {
                 for (int y = -1; y <= 1; ++y) {
                     for (int x = -1; x <= 1; ++x) {
@@ -82,6 +77,15 @@ public class ReprojectionShaderPass {
             vec4 prevClip = activeReproj * currClip;
             vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
             vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
+
+            if (isDynamicMob) {
+                float rawEntityDepth = texture(CurrentDepthSampler, texCoord).r;
+                float reprojectedOccluderDepth = (1.0 - prevNDC.z) * 0.5;
+                if (rawEntityDepth >= reprojectedOccluderDepth - 0.005) {
+                    fragColor = texture(CurrentColorSampler, texCoord);
+                    return;
+                }
+            }
 
             vec4 currColor = texture(CurrentColorSampler, texCoord);
             vec4 minColor = currColor;

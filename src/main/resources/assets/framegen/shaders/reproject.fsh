@@ -30,12 +30,6 @@ void main() {
     bool isViewmodel = (maskSample.g > 0.5) || (maskSample.r > 0.5 && closestDepth > 0.95);
     bool isDynamicMob = (maskSample.r > 0.5 && !isViewmodel);
 
-    // 0. Dynamic World Entities: Pass through at base framerate (avoids heavy optical flow and maintains Iris compatibility)
-    if (isDynamicMob) {
-        fragColor = texture(CurrentColorSampler, texCoord);
-        return;
-    }
-
     if (!isViewmodel && DepthDilationRadius > 0.0) {
         for (int y = -1; y <= 1; ++y) {
             for (int x = -1; x <= 1; ++x) {
@@ -56,6 +50,18 @@ void main() {
     vec4 prevClip = activeReproj * currClip;
     vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
     vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
+
+    // Depth-Coherent Stencil Composition (Eliminating Dynamic Entity Bifurcation)
+    // If the dynamic mob is in front of the reprojected intermediate world, pass through;
+    // if it is occluded behind a t=0.5 foreground obstacle, cull and fall through to background!
+    if (isDynamicMob) {
+        float rawEntityDepth = texture(CurrentDepthSampler, texCoord).r;
+        float reprojectedOccluderDepth = (1.0 - prevNDC.z) * 0.5;
+        if (rawEntityDepth >= reprojectedOccluderDepth - 0.005) {
+            fragColor = texture(CurrentColorSampler, texCoord);
+            return;
+        }
+    }
 
     // 2. Current center color & 3x3 color neighborhood AABB clamping
     vec4 currColor = texture(CurrentColorSampler, texCoord);
