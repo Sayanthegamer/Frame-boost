@@ -36,3 +36,6 @@
 - [x] Task: Update `DebugScreenOverlayMixin` with angular velocity & gating telemetry (Green) [ee1b016]
     - [x] Display real-time $\Delta\theta$, $\Delta d$, and Reprojection/Gated status on F3 screen
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [ee1b016]
+
+## Phase: Review Fixes [checkpoint: 0ed494b]
+- [x] Task: Apply review suggestions for viewmodel reprojection, delta-time normalized gating, and direct UV clamping [0ed494b]
