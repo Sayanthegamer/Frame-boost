@@ -100,4 +100,52 @@ class CameraMatrixTrackerTest {
         tracker.reset();
         assertThat(tracker.hasPreviousFrame()).isFalse();
     }
+
+    @Test
+    void testAngularVelocityCalculationZeroWhenStationary() {
+        Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
+
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(0.0f, within(1e-3f));
+        assertThat(tracker.getTranslationDelta()).isCloseTo(0.0f, within(1e-3f));
+        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isFalse();
+    }
+
+    @Test
+    void testAngularVelocity90DegreeSnapTriggersGating() {
+        Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0); // Looking forward (-Z)
+        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, 1, 0, 0, 0, 1, 0);  // Looking right (+X)
+
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0);
+
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(90.0f, within(1e-2f));
+        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isTrue();
+    }
+
+    @Test
+    void testAngularVelocityBelowThresholdDoesNotGate() {
+        Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        // Rotate 15 degrees yaw
+        float rad15 = (float) Math.toRadians(15.0);
+        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, (float) Math.sin(rad15), 0, -(float) Math.cos(rad15), 0, 1, 0);
+
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0);
+
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(15.0f, within(1e-2f));
+        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isFalse();
+    }
+
+    @Test
+    void testTranslationVelocityTriggersGating() {
+        Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
+        // Teleport 20 blocks
+        tracker.updateMatrices(view, proj, 20.0, 0.0, 0.0);
+
+        assertThat(tracker.getTranslationDelta()).isCloseTo(20.0f, within(1e-3f));
+        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isTrue();
+    }
 }

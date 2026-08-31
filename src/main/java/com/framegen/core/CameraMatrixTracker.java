@@ -20,6 +20,9 @@ public class CameraMatrixTracker {
     private double currentCamX, currentCamY, currentCamZ;
     private double previousCamX, previousCamY, previousCamZ;
 
+    private float angularDeltaDegrees = 0.0f;
+    private float translationDelta = 0.0f;
+
     private boolean hasPreviousFrame = false;
     private boolean initialized = false;
 
@@ -64,6 +67,19 @@ public class CameraMatrixTracker {
             float deltaX = (float) (currentCamX - previousCamX);
             float deltaY = (float) (currentCamY - previousCamY);
             float deltaZ = (float) (currentCamZ - previousCamZ);
+            this.translationDelta = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+            Vector3f prevForward = new Vector3f(-previousViewMatrix.m02(), -previousViewMatrix.m12(), -previousViewMatrix.m22());
+            Vector3f currForward = new Vector3f(-currentViewMatrix.m02(), -currentViewMatrix.m12(), -currentViewMatrix.m22());
+            if (prevForward.lengthSquared() > 0.0001f) {
+                prevForward.normalize();
+            }
+            if (currForward.lengthSquared() > 0.0001f) {
+                currForward.normalize();
+            }
+
+            float dot = Math.max(-1.0f, Math.min(1.0f, prevForward.dot(currForward)));
+            this.angularDeltaDegrees = (float) Math.toDegrees(Math.acos(dot));
 
             Matrix4f camTranslation = new Matrix4f().translation(deltaX, deltaY, deltaZ);
             reprojectionMatrix.set(previousViewProjectionMatrix)
@@ -73,6 +89,9 @@ public class CameraMatrixTracker {
             if (!reprojectionMatrix.isFinite()) {
                 reprojectionMatrix.identity();
             }
+        } else {
+            this.angularDeltaDegrees = 0.0f;
+            this.translationDelta = 0.0f;
         }
     }
 
@@ -94,6 +113,8 @@ public class CameraMatrixTracker {
     public synchronized void reset() {
         hasPreviousFrame = false;
         initialized = false;
+        angularDeltaDegrees = 0.0f;
+        translationDelta = 0.0f;
         currentViewMatrix.identity();
         currentProjectionMatrix.identity();
         currentViewProjectionMatrix.identity();
@@ -106,6 +127,21 @@ public class CameraMatrixTracker {
 
     public boolean hasPreviousFrame() {
         return hasPreviousFrame;
+    }
+
+    public synchronized float getAngularDeltaDegrees() {
+        return angularDeltaDegrees;
+    }
+
+    public synchronized float getTranslationDelta() {
+        return translationDelta;
+    }
+
+    public synchronized boolean isVelocityGated(float maxAngularVelocityThreshold, float maxTranslationVelocityThreshold) {
+        if (!hasPreviousFrame) {
+            return false;
+        }
+        return angularDeltaDegrees > maxAngularVelocityThreshold || translationDelta > maxTranslationVelocityThreshold;
     }
 
     public Matrix4f getCurrentViewMatrix() {
