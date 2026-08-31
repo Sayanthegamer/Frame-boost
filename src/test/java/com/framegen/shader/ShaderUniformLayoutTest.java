@@ -17,6 +17,7 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_BLEND_FACTOR).isEqualTo("BlendFactor");
         assertThat(ShaderConstants.UNIFORM_DEPTH_DILATION).isEqualTo("DepthDilationRadius");
         assertThat(ShaderConstants.UNIFORM_ENTITY_MASK).isEqualTo("EntityMaskSampler");
+        assertThat(ShaderConstants.UNIFORM_EDGE_FALLOFF).isEqualTo("EdgeFalloffMargin");
     }
 
     @Test

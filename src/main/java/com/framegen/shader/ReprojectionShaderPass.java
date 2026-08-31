@@ -46,6 +46,7 @@ public class ReprojectionShaderPass {
         uniform vec2 ScreenSize;
         uniform float BlendFactor;
         uniform float DepthDilationRadius;
+        uniform float EdgeFalloffMargin;
         void main() {
             // Fast-path: Dynamic entity / held item mask
             float isDynamic = texture(EntityMaskSampler, texCoord).r;
@@ -91,8 +92,14 @@ public class ReprojectionShaderPass {
                 }
             }
             bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
-            vec4 prevColor;
+            vec4 prevColor = currColor;
+            float edgeWeight = 0.0;
             if (validUV) {
+                vec2 edgeDist = min(prevUV, 1.0 - prevUV);
+                float minEdge = min(edgeDist.x, edgeDist.y);
+                float margin = max(EdgeFalloffMargin, 0.001);
+                edgeWeight = clamp(minEdge / margin, 0.0, 1.0);
+
                 float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
                 float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
                 float depthDiff = abs(actualPrevDepth - expectedPrevDepth);
@@ -103,11 +110,11 @@ public class ReprojectionShaderPass {
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
                     prevColor = currColor;
+                    edgeWeight = 0.0;
                 }
-            } else {
-                prevColor = currColor;
             }
-            fragColor = mix(currColor, prevColor, BlendFactor);
+            vec4 blendedWarp = mix(currColor, prevColor, edgeWeight);
+            fragColor = mix(currColor, blendedWarp, BlendFactor);
         }
         """;
 
@@ -146,6 +153,7 @@ public class ReprojectionShaderPass {
     private int uScreenSize = -1;
     private int uBlendFactor = -1;
     private int uDepthDilation = -1;
+    private int uEdgeFalloff = -1;
 
     // Uniform locations - HUD Composite
     private int uHudIntermediate = -1;
@@ -199,6 +207,7 @@ public class ReprojectionShaderPass {
             uScreenSize = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_SCREEN_SIZE);
             uBlendFactor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_BLEND_FACTOR);
             uDepthDilation = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEPTH_DILATION);
+            uEdgeFalloff = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_EDGE_FALLOFF);
 
             // Query uniform locations - HUD Composite
             uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, "IntermediateSampler");
@@ -311,6 +320,10 @@ public class ReprojectionShaderPass {
 
         if (uDepthDilation != -1) {
             GL20.glUniform1f(uDepthDilation, depthDilation);
+        }
+
+        if (uEdgeFalloff != -1) {
+            GL20.glUniform1f(uEdgeFalloff, 0.05f);
         }
 
         // Draw Fullscreen Quad

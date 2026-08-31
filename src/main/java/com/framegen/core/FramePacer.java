@@ -172,12 +172,14 @@ public class FramePacer {
                 ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
                 : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
         String statusStr = lastFrameGated ? "§eGATED (SNAP)§r" : "§aACTIVE§r";
+        float angularDelta = CameraMatrixTracker.getInstance().getAngularDeltaDegrees();
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Status: %s",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | RotDelta: §b%.1f°§r | Status: %s",
                 baseFps,
                 effectiveFps,
                 timeStr,
+                angularDelta,
                 statusStr
         );
     }

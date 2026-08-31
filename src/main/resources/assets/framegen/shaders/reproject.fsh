@@ -13,6 +13,7 @@ uniform mat4 ReprojectionMatrix;
 uniform vec2 ScreenSize;
 uniform float BlendFactor;
 uniform float DepthDilationRadius;
+uniform float EdgeFalloffMargin;
 
 void main() {
     // 0. Dynamic Entity / Held item fast-path: bypass reprojection to avoid smearing
@@ -69,9 +70,15 @@ void main() {
 
     // 4. Sample previous frame, test disocclusion against PreviousDepthSampler, and clamp
     bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
-    vec4 prevColor;
+    vec4 prevColor = currColor;
+    float edgeWeight = 0.0;
 
     if (validUV) {
+        vec2 edgeDist = min(prevUV, 1.0 - prevUV);
+        float minEdge = min(edgeDist.x, edgeDist.y);
+        float margin = max(EdgeFalloffMargin, 0.001);
+        edgeWeight = clamp(minEdge / margin, 0.0, 1.0);
+
         float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
         float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
 
@@ -85,11 +92,11 @@ void main() {
         } else {
             // Disoccluded: pixel was occluded or changed in the previous frame
             prevColor = currColor;
+            edgeWeight = 0.0;
         }
-    } else {
-        prevColor = currColor;
     }
 
-    // 5. Synthesize intermediate frame (t = BlendFactor)
-    fragColor = mix(currColor, prevColor, BlendFactor);
+    // 5. Synthesize intermediate frame (t = BlendFactor) with smooth edge boundary falloff
+    vec4 blendedWarp = mix(currColor, prevColor, edgeWeight);
+    fragColor = mix(currColor, blendedWarp, BlendFactor);
 }

@@ -43,6 +43,7 @@ class FramePacerTest {
         assertThat(telemetry).contains("60");
         assertThat(telemetry).contains("120");
         assertThat(telemetry).contains("0.35 ms");
+        assertThat(telemetry).contains("RotDelta");
         assertThat(telemetry).contains("ACTIVE");
 
         String disabledTelemetry = framePacer.getTelemetryString(false);

@@ -10,6 +10,7 @@ public final class ShaderConstants {
     public static final String UNIFORM_BLEND_FACTOR = "BlendFactor";
     public static final String UNIFORM_DEPTH_DILATION = "DepthDilationRadius";
     public static final String UNIFORM_ENTITY_MASK = "EntityMaskSampler";
+    public static final String UNIFORM_EDGE_FALLOFF = "EdgeFalloffMargin";
 
     public static final int TEXTURE_UNIT_CURRENT_COLOR = 0;
     public static final int TEXTURE_UNIT_PREVIOUS_COLOR = 1;
