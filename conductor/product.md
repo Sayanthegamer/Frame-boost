@@ -9,18 +9,19 @@ A lightweight, hardware-agnostic 2x Frame Generation system for Minecraft Java E
 
 ## Key Architecture & Features
 1. **Frame & Matrix Capture (`FrameCaptureManager`):**
-   - Persistent `RenderTarget` FBOs (`previousFrameFBO`, `currentFrameFBO`).
+   - Persistent `RenderTarget` FBOs (`previousFrameFBO`, `currentFrameFBO`, `intermediateFrameFBO`, `entityMaskFBO`).
    - Interception of color and non-linear depth buffers before HUD overlay rendering.
-   - Per-frame caching of camera View, Projection, and Inverse View-Projection matrices.
+   - Per-frame caching of camera View, Projection, Inverse View-Projection matrices, and angular velocity deltas.
 2. **GLSL Reprojection Pipeline (`reproject.fsh`):**
    - Unprojects screen coordinates to 3D world space and reprojects into previous camera space.
-   - Depth-dilation and color clamping to suppress ghosting and disocclusion artifacts.
+   - Depth-dilation, color clamping, dynamic entity masking, and smooth edge boundary falloff to suppress ghosting and disocclusion artifacts.
    - Intermediate frame blending ($t = 0.5$).
 3. **Presentation & Pacing Engine (`FramePacer`):**
    - Regulated frame presentation interleaving base frames and generated frames ($t = 0.5$).
+   - Forward-only angular velocity gating: automatically falls back to raw base-frame passthrough on rapid camera snaps (>30°/tick) with zero input lag.
    - Independent HUD pass (`InGameHud`) rendered cleanly on top of both frame types.
 4. **Configuration & Controls:**
-   - Lightweight JSON configuration file with hotkey toggle and status overlay indicator.
+   - Lightweight JSON configuration file with hotkey toggle, velocity gating thresholds, and real-time rotation delta telemetry on F3 debug overlay.
 
 ## Scope & Compatibility Strategy
 - Primary target: Vanilla Fabric Loader / Blaze3D / OpenGL.
