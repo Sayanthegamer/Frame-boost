@@ -48,4 +48,15 @@ class FramePacerTest {
         String disabledTelemetry = framePacer.getTelemetryString(false);
         assertThat(disabledTelemetry).contains("DISABLED");
     }
+
+    @Test
+    void testGatedTelemetryStringFormatting() {
+        framePacer.recordBaseFrame(16_666_666L);
+        framePacer.recordReprojectionTime(350_000L);
+        framePacer.setLastFrameGated(true);
+
+        String telemetry = framePacer.getTelemetryString(true);
+        assertThat(telemetry).contains("GATED (SNAP)");
+        assertThat(framePacer.isLastFrameGated()).isTrue();
+    }
 }

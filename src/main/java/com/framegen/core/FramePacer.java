@@ -21,6 +21,7 @@ public class FramePacer {
     private double baseFps = 0.0;
     private double effectiveFps = 0.0;
     private double reprojectionTimeMs = 0.0;
+    private boolean lastFrameGated = false;
 
     public FramePacer() {
     }
@@ -66,6 +67,12 @@ public class FramePacer {
             return;
         }
 
+        boolean isGated = config.isVelocityGatingEnabled() && matrixTracker.isVelocityGated(
+                config.getMaxAngularVelocityThreshold(),
+                config.getMaxTranslationVelocityThreshold()
+        );
+        this.lastFrameGated = isGated;
+
         long startReprojection = System.nanoTime();
 
         try {
@@ -74,6 +81,7 @@ public class FramePacer {
             TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
 
             if (currentFBO != null && previousFBO != null && intermediateFBO != null) {
+                float effectiveBlend = isGated ? 0.0f : config.getInterpolationFactor();
                 shaderPass.render(
                         currentFBO.getColorTexture(),
                         previousFBO.getColorTexture(),
@@ -83,7 +91,7 @@ public class FramePacer {
                         matrixTracker.getReprojectionMatrix(),
                         mainTarget.width,
                         mainTarget.height,
-                        config.getInterpolationFactor(),
+                        effectiveBlend,
                         config.getDepthDilationRadius()
                 );
             }
@@ -161,13 +169,23 @@ public class FramePacer {
         String timeStr = reprojectionTimeMs < 0.01
                 ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
                 : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
+        String statusStr = lastFrameGated ? "§eGATED (SNAP)§r" : "§aACTIVE§r";
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Status: §aACTIVE§r",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Status: %s",
                 baseFps,
                 effectiveFps,
-                timeStr
+                timeStr,
+                statusStr
         );
+    }
+
+    public boolean isLastFrameGated() {
+        return lastFrameGated;
+    }
+
+    public void setLastFrameGated(boolean lastFrameGated) {
+        this.lastFrameGated = lastFrameGated;
     }
 
     public double getBaseFps() {

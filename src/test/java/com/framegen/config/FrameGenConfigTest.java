@@ -18,6 +18,9 @@ class FrameGenConfigTest {
         assertThat(config.getInterpolationFactor()).isEqualTo(0.5f);
         assertThat(config.isDebugOverlayEnabled()).isTrue();
         assertThat(config.getDepthDilationRadius()).isEqualTo(1.0f);
+        assertThat(config.isVelocityGatingEnabled()).isTrue();
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(30.0f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(10.0f);
     }
 
     @Test
@@ -47,6 +50,18 @@ class FrameGenConfigTest {
 
         config.setDepthDilationRadius(10.0f);
         assertThat(config.getDepthDilationRadius()).isEqualTo(5.0f);
+
+        config.setMaxAngularVelocityThreshold(0.0f);
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(1.0f);
+
+        config.setMaxAngularVelocityThreshold(200.0f);
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(180.0f);
+
+        config.setMaxTranslationVelocityThreshold(0.05f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(0.1f);
+
+        config.setMaxTranslationVelocityThreshold(150.0f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(100.0f);
     }
 
     @Test
@@ -57,6 +72,9 @@ class FrameGenConfigTest {
         original.setInterpolationFactor(0.5f);
         original.setDebugOverlayEnabled(false);
         original.setDepthDilationRadius(2.0f);
+        original.setVelocityGatingEnabled(false);
+        original.setMaxAngularVelocityThreshold(45.0f);
+        original.setMaxTranslationVelocityThreshold(15.0f);
 
         FrameGenConfig.save(original, configFile);
         assertThat(Files.exists(configFile)).isTrue();
@@ -66,6 +84,9 @@ class FrameGenConfigTest {
         assertThat(loaded.getInterpolationFactor()).isEqualTo(0.5f);
         assertThat(loaded.isDebugOverlayEnabled()).isFalse();
         assertThat(loaded.getDepthDilationRadius()).isEqualTo(2.0f);
+        assertThat(loaded.isVelocityGatingEnabled()).isFalse();
+        assertThat(loaded.getMaxAngularVelocityThreshold()).isEqualTo(45.0f);
+        assertThat(loaded.getMaxTranslationVelocityThreshold()).isEqualTo(15.0f);
     }
 
     @Test

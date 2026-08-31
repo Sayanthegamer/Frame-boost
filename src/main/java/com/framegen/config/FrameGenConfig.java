@@ -23,6 +23,9 @@ public class FrameGenConfig {
     private float interpolationFactor = 0.5f;
     private boolean debugOverlayEnabled = true;
     private float depthDilationRadius = 1.0f;
+    private boolean velocityGatingEnabled = true;
+    private float maxAngularVelocityThreshold = 30.0f;
+    private float maxTranslationVelocityThreshold = 10.0f;
 
     public FrameGenConfig() {
     }
@@ -82,6 +85,18 @@ public class FrameGenConfig {
         } else if (this.depthDilationRadius > 5.0f) {
             this.depthDilationRadius = 5.0f;
         }
+
+        if (this.maxAngularVelocityThreshold < 1.0f) {
+            this.maxAngularVelocityThreshold = 1.0f;
+        } else if (this.maxAngularVelocityThreshold > 180.0f) {
+            this.maxAngularVelocityThreshold = 180.0f;
+        }
+
+        if (this.maxTranslationVelocityThreshold < 0.1f) {
+            this.maxTranslationVelocityThreshold = 0.1f;
+        } else if (this.maxTranslationVelocityThreshold > 100.0f) {
+            this.maxTranslationVelocityThreshold = 100.0f;
+        }
     }
 
     public boolean isEnabled() {
@@ -120,6 +135,32 @@ public class FrameGenConfig {
 
     public void setDepthDilationRadius(float depthDilationRadius) {
         this.depthDilationRadius = depthDilationRadius;
+        validate();
+    }
+
+    public boolean isVelocityGatingEnabled() {
+        return velocityGatingEnabled;
+    }
+
+    public void setVelocityGatingEnabled(boolean velocityGatingEnabled) {
+        this.velocityGatingEnabled = velocityGatingEnabled;
+    }
+
+    public float getMaxAngularVelocityThreshold() {
+        return maxAngularVelocityThreshold;
+    }
+
+    public void setMaxAngularVelocityThreshold(float maxAngularVelocityThreshold) {
+        this.maxAngularVelocityThreshold = maxAngularVelocityThreshold;
+        validate();
+    }
+
+    public float getMaxTranslationVelocityThreshold() {
+        return maxTranslationVelocityThreshold;
+    }
+
+    public void setMaxTranslationVelocityThreshold(float maxTranslationVelocityThreshold) {
+        this.maxTranslationVelocityThreshold = maxTranslationVelocityThreshold;
         validate();
     }
 }
