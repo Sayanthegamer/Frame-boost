@@ -1,0 +1,4 @@
+Phase: Strict Sub-Pixel Border Rejection & Forward Viewmodel Shading
+- Implemented strict sub-pixel border rejection in reproject.fsh to eliminate barcode stretching and streak dragging
+- Synchronized viewmodel lighting using forward-only dynamic LightTexture evaluation at interpolated camera coordinates
+- Supported alpha blending for translucent held items directly against intermediate synthesized background
