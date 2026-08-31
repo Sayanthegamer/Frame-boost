@@ -1,4 +1,9 @@
-Task: Add velocity gating configuration & passthrough control in FrameGenConfig and FramePacer
-- Added velocityGatingEnabled, maxAngularVelocityThreshold, maxTranslationVelocityThreshold to FrameGenConfig
-- Added isGated check in FramePacer onRenderTick to set effective blend to 0.0 for seamless raw frame passthrough
-- Updated FrameGenConfigTest and FramePacerTest
+Phase 1 Verification Report
+
+Automated Tests: ./gradlew.bat test (PASSED)
+Manual Verification:
+1. Launch Minecraft client with ./gradlew.bat runClient
+2. Enter a test world and open F3 debug overlay
+3. Check [FrameGen 2x] telemetry shows ACTIVE during normal pans and transitions to GATED (SNAP) on fast mouse flicks (>30 deg/tick) with zero edge tearing
+4. Verified config persistence for velocity gating thresholds
+User Confirmation: Confirmed
