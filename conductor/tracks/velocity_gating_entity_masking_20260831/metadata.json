@@ -1,0 +1,8 @@
+{
+  "track_id": "velocity_gating_entity_masking_20260831",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-08-31T11:51:00+05:30",
+  "updated_at": "2026-08-31T11:51:00+05:30",
+  "description": "Camera Velocity Gating and Dynamic Entity Masking for Disocclusion-Free Reprojection"
+}
