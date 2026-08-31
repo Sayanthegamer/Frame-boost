@@ -24,8 +24,8 @@ public class FrameGenConfig {
     private boolean debugOverlayEnabled = true;
     private float depthDilationRadius = 1.0f;
     private boolean velocityGatingEnabled = true;
-    private float maxAngularVelocityThreshold = 30.0f;
-    private float maxTranslationVelocityThreshold = 10.0f;
+    private float maxAngularVelocityThreshold = 720.0f; // degrees / second
+    private float maxTranslationVelocityThreshold = 50.0f; // blocks / second
 
     public FrameGenConfig() {
     }
@@ -86,16 +86,16 @@ public class FrameGenConfig {
             this.depthDilationRadius = 5.0f;
         }
 
-        if (this.maxAngularVelocityThreshold < 1.0f) {
-            this.maxAngularVelocityThreshold = 1.0f;
-        } else if (this.maxAngularVelocityThreshold > 180.0f) {
-            this.maxAngularVelocityThreshold = 180.0f;
+        if (this.maxAngularVelocityThreshold < 10.0f) {
+            this.maxAngularVelocityThreshold = 10.0f;
+        } else if (this.maxAngularVelocityThreshold > 7200.0f) {
+            this.maxAngularVelocityThreshold = 7200.0f;
         }
 
-        if (this.maxTranslationVelocityThreshold < 0.1f) {
-            this.maxTranslationVelocityThreshold = 0.1f;
-        } else if (this.maxTranslationVelocityThreshold > 100.0f) {
-            this.maxTranslationVelocityThreshold = 100.0f;
+        if (this.maxTranslationVelocityThreshold < 1.0f) {
+            this.maxTranslationVelocityThreshold = 1.0f;
+        } else if (this.maxTranslationVelocityThreshold > 500.0f) {
+            this.maxTranslationVelocityThreshold = 500.0f;
         }
     }
 

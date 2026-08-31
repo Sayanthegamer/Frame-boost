@@ -13,11 +13,11 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_CURRENT_DEPTH).isEqualTo("CurrentDepthSampler");
         assertThat(ShaderConstants.UNIFORM_PREVIOUS_DEPTH).isEqualTo("PreviousDepthSampler");
         assertThat(ShaderConstants.UNIFORM_REPROJECTION_MATRIX).isEqualTo("ReprojectionMatrix");
+        assertThat(ShaderConstants.UNIFORM_VIEWMODEL_REPROJECTION_MATRIX).isEqualTo("ViewModelReprojectionMatrix");
         assertThat(ShaderConstants.UNIFORM_SCREEN_SIZE).isEqualTo("ScreenSize");
         assertThat(ShaderConstants.UNIFORM_BLEND_FACTOR).isEqualTo("BlendFactor");
         assertThat(ShaderConstants.UNIFORM_DEPTH_DILATION).isEqualTo("DepthDilationRadius");
         assertThat(ShaderConstants.UNIFORM_ENTITY_MASK).isEqualTo("EntityMaskSampler");
-        assertThat(ShaderConstants.UNIFORM_EDGE_FALLOFF).isEqualTo("EdgeFalloffMargin");
     }
 
     @Test

@@ -43,18 +43,11 @@ public class ReprojectionShaderPass {
         uniform sampler2D PreviousDepthSampler;
         uniform sampler2D EntityMaskSampler;
         uniform mat4 ReprojectionMatrix;
+        uniform mat4 ViewModelReprojectionMatrix;
         uniform vec2 ScreenSize;
         uniform float BlendFactor;
         uniform float DepthDilationRadius;
-        uniform float EdgeFalloffMargin;
         void main() {
-            // Fast-path: Dynamic entity / held item mask
-            float isDynamic = texture(EntityMaskSampler, texCoord).r;
-            if (isDynamic > 0.5) {
-                fragColor = texture(CurrentColorSampler, texCoord);
-                return;
-            }
-
             vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
             float closestDepth = texture(CurrentDepthSampler, texCoord).r;
 
@@ -64,22 +57,32 @@ public class ReprojectionShaderPass {
                 return;
             }
 
-            if (DepthDilationRadius > 0.0) {
+            vec4 maskSample = texture(EntityMaskSampler, texCoord);
+            bool isViewmodel = (maskSample.g > 0.5) || (maskSample.r > 0.5 && closestDepth > 0.95);
+            bool isDynamicMob = (maskSample.r > 0.5 && !isViewmodel);
+
+            if (isDynamicMob) {
+                fragColor = texture(CurrentColorSampler, texCoord);
+                return;
+            }
+
+            if (!isViewmodel && DepthDilationRadius > 0.0) {
                 for (int y = -1; y <= 1; ++y) {
                     for (int x = -1; x <= 1; ++x) {
                         vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
                         float d = texture(CurrentDepthSampler, texCoord + offset).r;
-                        // In Reverse-Z, closer foreground objects have LARGER depth values
                         closestDepth = max(closestDepth, d);
                     }
                 }
             }
-            // Reverse-Z: depth 1.0 (near) -> zNDC -1.0, depth 0.0 (far) -> zNDC +1.0
+
             float zNDC = 1.0 - closestDepth * 2.0;
             vec4 currClip = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
-            vec4 prevClip = ReprojectionMatrix * currClip;
+            mat4 activeReproj = isViewmodel ? ViewModelReprojectionMatrix : ReprojectionMatrix;
+            vec4 prevClip = activeReproj * currClip;
             vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
             vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
+
             vec4 currColor = texture(CurrentColorSampler, texCoord);
             vec4 minColor = currColor;
             vec4 maxColor = currColor;
@@ -91,30 +94,26 @@ public class ReprojectionShaderPass {
                     maxColor = max(maxColor, neighbor);
                 }
             }
+
             bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
             vec4 prevColor = currColor;
-            float edgeWeight = 0.0;
             if (validUV) {
-                vec2 edgeDist = min(prevUV, 1.0 - prevUV);
-                float minEdge = min(edgeDist.x, edgeDist.y);
-                float margin = max(EdgeFalloffMargin, 0.001);
-                edgeWeight = clamp(minEdge / margin, 0.0, 1.0);
-
-                float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
+                vec2 clampedUV = clamp(prevUV, 0.0, 1.0);
+                float actualPrevDepth = texture(PreviousDepthSampler, clampedUV).r;
                 float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
                 float depthDiff = abs(actualPrevDepth - expectedPrevDepth);
-                float depthThreshold = max(0.02 * max(expectedPrevDepth, 0.001), 0.005);
+                float depthThreshold = isViewmodel ? 0.08 : max(0.02 * max(expectedPrevDepth, 0.001), 0.005);
 
                 if (depthDiff <= depthThreshold) {
-                    vec4 rawPrev = texture(PreviousColorSampler, prevUV);
+                    vec4 rawPrev = texture(PreviousColorSampler, clampedUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
                     prevColor = currColor;
-                    edgeWeight = 0.0;
                 }
+            } else {
+                prevColor = currColor;
             }
-            vec4 blendedWarp = mix(currColor, prevColor, edgeWeight);
-            fragColor = mix(currColor, blendedWarp, BlendFactor);
+            fragColor = mix(currColor, prevColor, BlendFactor);
         }
         """;
 
@@ -150,10 +149,10 @@ public class ReprojectionShaderPass {
     private int uPreviousDepth = -1;
     private int uEntityMask = -1;
     private int uReprojectionMatrix = -1;
+    private int uViewModelReprojectionMatrix = -1;
     private int uScreenSize = -1;
     private int uBlendFactor = -1;
     private int uDepthDilation = -1;
-    private int uEdgeFalloff = -1;
 
     // Uniform locations - HUD Composite
     private int uHudIntermediate = -1;
@@ -161,6 +160,7 @@ public class ReprojectionShaderPass {
     private int uHudWorldOnly = -1;
 
     private final FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
+    private final FloatBuffer vmMatrixBuffer = BufferUtils.createFloatBuffer(16);
 
     public ReprojectionShaderPass() {
     }
@@ -204,10 +204,10 @@ public class ReprojectionShaderPass {
             uPreviousDepth = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_PREVIOUS_DEPTH);
             uEntityMask = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_ENTITY_MASK);
             uReprojectionMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_REPROJECTION_MATRIX);
+            uViewModelReprojectionMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_VIEWMODEL_REPROJECTION_MATRIX);
             uScreenSize = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_SCREEN_SIZE);
             uBlendFactor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_BLEND_FACTOR);
             uDepthDilation = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEPTH_DILATION);
-            uEdgeFalloff = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_EDGE_FALLOFF);
 
             // Query uniform locations - HUD Composite
             uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, "IntermediateSampler");
@@ -265,7 +265,7 @@ public class ReprojectionShaderPass {
             float blendFactor,
             float depthDilation
     ) {
-        render(currentColor, previousColor, currentDepth, previousDepth, null, outputColor, reprojectMatrix, width, height, blendFactor, depthDilation);
+        render(currentColor, previousColor, currentDepth, previousDepth, null, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
     }
 
     public synchronized void render(
@@ -276,6 +276,23 @@ public class ReprojectionShaderPass {
             GpuTexture entityMask,
             GpuTexture outputColor,
             Matrix4f reprojectMatrix,
+            int width,
+            int height,
+            float blendFactor,
+            float depthDilation
+    ) {
+        render(currentColor, previousColor, currentDepth, previousDepth, entityMask, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
+    }
+
+    public synchronized void render(
+            GpuTexture currentColor,
+            GpuTexture previousColor,
+            GpuTexture currentDepth,
+            GpuTexture previousDepth,
+            GpuTexture entityMask,
+            GpuTexture outputColor,
+            Matrix4f reprojectMatrix,
+            Matrix4f viewmodelReprojectMatrix,
             int width,
             int height,
             float blendFactor,
@@ -310,6 +327,15 @@ public class ReprojectionShaderPass {
             GL20.glUniformMatrix4fv(uReprojectionMatrix, false, matrixBuffer);
         }
 
+        if (uViewModelReprojectionMatrix != -1) {
+            Matrix4f vmMat = viewmodelReprojectMatrix != null ? viewmodelReprojectMatrix : reprojectMatrix;
+            if (vmMat != null) {
+                vmMatrixBuffer.clear();
+                vmMat.get(vmMatrixBuffer);
+                GL20.glUniformMatrix4fv(uViewModelReprojectionMatrix, false, vmMatrixBuffer);
+            }
+        }
+
         if (uScreenSize != -1) {
             GL20.glUniform2f(uScreenSize, (float) width, (float) height);
         }
@@ -320,10 +346,6 @@ public class ReprojectionShaderPass {
 
         if (uDepthDilation != -1) {
             GL20.glUniform1f(uDepthDilation, depthDilation);
-        }
-
-        if (uEdgeFalloff != -1) {
-            GL20.glUniform1f(uEdgeFalloff, 0.05f);
         }
 
         // Draw Fullscreen Quad

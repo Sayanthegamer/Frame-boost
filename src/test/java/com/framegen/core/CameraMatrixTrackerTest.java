@@ -104,12 +104,14 @@ class CameraMatrixTrackerTest {
     @Test
     void testAngularVelocityCalculationZeroWhenStationary() {
         Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
-        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
-        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
 
         assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(0.0f, within(1e-3f));
+        assertThat(tracker.getAngularVelocityDegPerSec()).isCloseTo(0.0f, within(1e-3f));
         assertThat(tracker.getTranslationDelta()).isCloseTo(0.0f, within(1e-3f));
-        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isFalse();
+        assertThat(tracker.getTranslationVelocityBlocksPerSec()).isCloseTo(0.0f, within(1e-3f));
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f)).isFalse();
     }
 
     @Test
@@ -117,35 +119,53 @@ class CameraMatrixTrackerTest {
         Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0); // Looking forward (-Z)
         Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, 1, 0, 0, 0, 1, 0);  // Looking right (+X)
 
-        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0);
-        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
 
         assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(90.0f, within(1e-2f));
-        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isTrue();
+        assertThat(tracker.getAngularVelocityDegPerSec()).isGreaterThan(5000.0f);
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f)).isTrue();
     }
 
     @Test
     void testAngularVelocityBelowThresholdDoesNotGate() {
         Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
-        // Rotate 15 degrees yaw
-        float rad15 = (float) Math.toRadians(15.0);
-        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, (float) Math.sin(rad15), 0, -(float) Math.cos(rad15), 0, 1, 0);
+        // Rotate 2 degrees yaw in 1/60s (120 deg/sec)
+        float rad2 = (float) Math.toRadians(2.0);
+        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, (float) Math.sin(rad2), 0, -(float) Math.cos(rad2), 0, 1, 0);
 
-        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0);
-        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0);
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
 
-        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(15.0f, within(1e-2f));
-        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isFalse();
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(2.0f, within(1e-2f));
+        assertThat(tracker.getAngularVelocityDegPerSec()).isCloseTo(120.0f, within(5.0f));
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f)).isFalse();
     }
 
     @Test
     void testTranslationVelocityTriggersGating() {
         Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
-        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
-        // Teleport 20 blocks
-        tracker.updateMatrices(view, proj, 20.0, 0.0, 0.0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        // Teleport 20 blocks in 1/60s (1200 blocks/sec)
+        tracker.updateMatrices(view, proj, 20.0, 0.0, 0.0, 1.0 / 60.0);
 
         assertThat(tracker.getTranslationDelta()).isCloseTo(20.0f, within(1e-3f));
-        assertThat(tracker.isVelocityGated(30.0f, 10.0f)).isTrue();
+        assertThat(tracker.getTranslationVelocityBlocksPerSec()).isGreaterThan(1000.0f);
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f)).isTrue();
+    }
+
+    @Test
+    void testViewmodelReprojectionMatrixIsRotationOnly() {
+        Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        // Teleport camera 50 blocks without rotating
+        tracker.updateMatrices(view2, proj, 50.0, 0.0, 0.0, 1.0 / 60.0);
+
+        Matrix4f vmMat = tracker.getViewmodelReprojectionMatrix();
+        assertThat(vmMat).isNotNull();
+        // Since rotation is zero, viewmodel reprojection should be identity
+        assertThat(vmMat.isFinite()).isTrue();
     }
 }

@@ -16,12 +16,15 @@ public class CameraMatrixTracker {
     private final Matrix4f previousViewProjectionMatrix = new Matrix4f();
 
     private final Matrix4f reprojectionMatrix = new Matrix4f();
+    private final Matrix4f viewmodelReprojectionMatrix = new Matrix4f();
 
     private double currentCamX, currentCamY, currentCamZ;
     private double previousCamX, previousCamY, previousCamZ;
 
     private float angularDeltaDegrees = 0.0f;
     private float translationDelta = 0.0f;
+    private float angularVelocityDegPerSec = 0.0f;
+    private float translationVelocityBlocksPerSec = 0.0f;
 
     private boolean hasPreviousFrame = false;
     private boolean initialized = false;
@@ -39,6 +42,10 @@ public class CameraMatrixTracker {
     }
 
     public synchronized void updateMatrices(Matrix4f viewMatrix, Matrix4f projectionMatrix, double camX, double camY, double camZ) {
+        updateMatrices(viewMatrix, projectionMatrix, camX, camY, camZ, 1.0 / 60.0);
+    }
+
+    public synchronized void updateMatrices(Matrix4f viewMatrix, Matrix4f projectionMatrix, double camX, double camY, double camZ, double frameDeltaSeconds) {
         if (initialized) {
             previousViewMatrix.set(currentViewMatrix);
             previousProjectionMatrix.set(currentProjectionMatrix);
@@ -81,6 +88,11 @@ public class CameraMatrixTracker {
             float dot = Math.max(-1.0f, Math.min(1.0f, prevForward.dot(currForward)));
             this.angularDeltaDegrees = (float) Math.toDegrees(Math.acos(dot));
 
+            double safeDt = Math.max(frameDeltaSeconds, 0.0001);
+            this.angularVelocityDegPerSec = (float) (this.angularDeltaDegrees / safeDt);
+            this.translationVelocityBlocksPerSec = (float) (this.translationDelta / safeDt);
+
+            // Static world terrain reprojection
             Matrix4f camTranslation = new Matrix4f().translation(deltaX, deltaY, deltaZ);
             reprojectionMatrix.set(previousViewProjectionMatrix)
                     .mul(camTranslation)
@@ -89,9 +101,19 @@ public class CameraMatrixTracker {
             if (!reprojectionMatrix.isFinite()) {
                 reprojectionMatrix.identity();
             }
+
+            // Dedicated Viewmodel rotation-only reprojection
+            viewmodelReprojectionMatrix.set(previousViewProjectionMatrix)
+                    .mul(currentInvViewProjectionMatrix);
+
+            if (!viewmodelReprojectionMatrix.isFinite()) {
+                viewmodelReprojectionMatrix.identity();
+            }
         } else {
             this.angularDeltaDegrees = 0.0f;
             this.translationDelta = 0.0f;
+            this.angularVelocityDegPerSec = 0.0f;
+            this.translationVelocityBlocksPerSec = 0.0f;
         }
     }
 
@@ -115,6 +137,8 @@ public class CameraMatrixTracker {
         initialized = false;
         angularDeltaDegrees = 0.0f;
         translationDelta = 0.0f;
+        angularVelocityDegPerSec = 0.0f;
+        translationVelocityBlocksPerSec = 0.0f;
         currentViewMatrix.identity();
         currentProjectionMatrix.identity();
         currentViewProjectionMatrix.identity();
@@ -123,6 +147,7 @@ public class CameraMatrixTracker {
         previousProjectionMatrix.identity();
         previousViewProjectionMatrix.identity();
         reprojectionMatrix.identity();
+        viewmodelReprojectionMatrix.identity();
     }
 
     public boolean hasPreviousFrame() {
@@ -137,11 +162,19 @@ public class CameraMatrixTracker {
         return translationDelta;
     }
 
-    public synchronized boolean isVelocityGated(float maxAngularVelocityThreshold, float maxTranslationVelocityThreshold) {
+    public synchronized float getAngularVelocityDegPerSec() {
+        return angularVelocityDegPerSec;
+    }
+
+    public synchronized float getTranslationVelocityBlocksPerSec() {
+        return translationVelocityBlocksPerSec;
+    }
+
+    public synchronized boolean isVelocityGated(float maxAngularVelocityDegPerSec, float maxTranslationVelocityBlocksPerSec) {
         if (!hasPreviousFrame) {
             return false;
         }
-        return angularDeltaDegrees > maxAngularVelocityThreshold || translationDelta > maxTranslationVelocityThreshold;
+        return angularVelocityDegPerSec > maxAngularVelocityDegPerSec || translationVelocityBlocksPerSec > maxTranslationVelocityBlocksPerSec;
     }
 
     public Matrix4f getCurrentViewMatrix() {
@@ -174,6 +207,10 @@ public class CameraMatrixTracker {
 
     public Matrix4f getReprojectionMatrix() {
         return new Matrix4f(reprojectionMatrix);
+    }
+
+    public Matrix4f getViewmodelReprojectionMatrix() {
+        return new Matrix4f(viewmodelReprojectionMatrix);
     }
 
     public double getCurrentCamX() {

@@ -91,6 +91,7 @@ public class FramePacer {
                         entityMaskFBO != null ? entityMaskFBO.getColorTexture() : null,
                         intermediateFBO.getColorTexture(),
                         matrixTracker.getReprojectionMatrix(),
+                        matrixTracker.getViewmodelReprojectionMatrix(),
                         mainTarget.width,
                         mainTarget.height,
                         effectiveBlend,
@@ -172,14 +173,14 @@ public class FramePacer {
                 ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
                 : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
         String statusStr = lastFrameGated ? "§eGATED (SNAP)§r" : "§aACTIVE§r";
-        float angularDelta = CameraMatrixTracker.getInstance().getAngularDeltaDegrees();
+        float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | RotDelta: §b%.1f°§r | Status: %s",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Omega: §b%.0f°/s§r | Status: %s",
                 baseFps,
                 effectiveFps,
                 timeStr,
-                angularDelta,
+                angularVel,
                 statusStr
         );
     }

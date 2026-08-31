@@ -19,8 +19,8 @@ class FrameGenConfigTest {
         assertThat(config.isDebugOverlayEnabled()).isTrue();
         assertThat(config.getDepthDilationRadius()).isEqualTo(1.0f);
         assertThat(config.isVelocityGatingEnabled()).isTrue();
-        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(30.0f);
-        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(10.0f);
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(720.0f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(50.0f);
     }
 
     @Test
@@ -52,16 +52,16 @@ class FrameGenConfigTest {
         assertThat(config.getDepthDilationRadius()).isEqualTo(5.0f);
 
         config.setMaxAngularVelocityThreshold(0.0f);
-        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(1.0f);
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(10.0f);
 
-        config.setMaxAngularVelocityThreshold(200.0f);
-        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(180.0f);
+        config.setMaxAngularVelocityThreshold(10000.0f);
+        assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(7200.0f);
 
         config.setMaxTranslationVelocityThreshold(0.05f);
-        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(0.1f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(1.0f);
 
-        config.setMaxTranslationVelocityThreshold(150.0f);
-        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(100.0f);
+        config.setMaxTranslationVelocityThreshold(1000.0f);
+        assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(500.0f);
     }
 
     @Test
