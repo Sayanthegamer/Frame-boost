@@ -1,0 +1,5 @@
+Phase: Review Fixes
+- Implemented dedicated ViewModelReprojectionMatrix (rotation-only) to eliminate viewmodel judder at 2x frame rate
+- Retained base-framerate stenciling for world entities to preserve Iris compatibility without optical flow overhead
+- Normalized velocity gating to angular velocity (deg/s) and translation rate (blocks/s) using render delta time
+- Replaced EdgeFalloffMargin temporal halo blending with direct UV boundary clamping and clean fallback
