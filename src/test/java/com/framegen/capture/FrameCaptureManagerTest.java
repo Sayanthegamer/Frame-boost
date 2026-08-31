@@ -20,6 +20,7 @@ class FrameCaptureManagerTest {
         assertThat(captureManager.getHeight()).isEqualTo(0);
         assertThat(captureManager.isReady()).isFalse();
         assertThat(captureManager.hasPreviousFrame()).isFalse();
+        assertThat(captureManager.getEntityMaskFBO()).isNull();
     }
 
     @Test

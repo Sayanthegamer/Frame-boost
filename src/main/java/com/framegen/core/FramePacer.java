@@ -79,6 +79,7 @@ public class FramePacer {
             TextureTarget currentFBO = captureManager.getCurrentFrameFBO();
             TextureTarget previousFBO = captureManager.getPreviousFrameFBO();
             TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
+            TextureTarget entityMaskFBO = captureManager.getEntityMaskFBO();
 
             if (currentFBO != null && previousFBO != null && intermediateFBO != null) {
                 float effectiveBlend = isGated ? 0.0f : config.getInterpolationFactor();
@@ -87,6 +88,7 @@ public class FramePacer {
                         previousFBO.getColorTexture(),
                         currentFBO.getDepthTexture(),
                         previousFBO.getDepthTexture(),
+                        entityMaskFBO != null ? entityMaskFBO.getColorTexture() : null,
                         intermediateFBO.getColorTexture(),
                         matrixTracker.getReprojectionMatrix(),
                         mainTarget.width,

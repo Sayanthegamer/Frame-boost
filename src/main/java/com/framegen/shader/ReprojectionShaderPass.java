@@ -41,11 +41,19 @@ public class ReprojectionShaderPass {
         uniform sampler2D PreviousColorSampler;
         uniform sampler2D CurrentDepthSampler;
         uniform sampler2D PreviousDepthSampler;
+        uniform sampler2D EntityMaskSampler;
         uniform mat4 ReprojectionMatrix;
         uniform vec2 ScreenSize;
         uniform float BlendFactor;
         uniform float DepthDilationRadius;
         void main() {
+            // Fast-path: Dynamic entity / held item mask
+            float isDynamic = texture(EntityMaskSampler, texCoord).r;
+            if (isDynamic > 0.5) {
+                fragColor = texture(CurrentColorSampler, texCoord);
+                return;
+            }
+
             vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
             float closestDepth = texture(CurrentDepthSampler, texCoord).r;
 
@@ -133,6 +141,7 @@ public class ReprojectionShaderPass {
     private int uPreviousColor = -1;
     private int uCurrentDepth = -1;
     private int uPreviousDepth = -1;
+    private int uEntityMask = -1;
     private int uReprojectionMatrix = -1;
     private int uScreenSize = -1;
     private int uBlendFactor = -1;
@@ -185,6 +194,7 @@ public class ReprojectionShaderPass {
             uPreviousColor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_PREVIOUS_COLOR);
             uCurrentDepth = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_CURRENT_DEPTH);
             uPreviousDepth = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_PREVIOUS_DEPTH);
+            uEntityMask = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_ENTITY_MASK);
             uReprojectionMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_REPROJECTION_MATRIX);
             uScreenSize = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_SCREEN_SIZE);
             uBlendFactor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_BLEND_FACTOR);
@@ -246,6 +256,22 @@ public class ReprojectionShaderPass {
             float blendFactor,
             float depthDilation
     ) {
+        render(currentColor, previousColor, currentDepth, previousDepth, null, outputColor, reprojectMatrix, width, height, blendFactor, depthDilation);
+    }
+
+    public synchronized void render(
+            GpuTexture currentColor,
+            GpuTexture previousColor,
+            GpuTexture currentDepth,
+            GpuTexture previousDepth,
+            GpuTexture entityMask,
+            GpuTexture outputColor,
+            Matrix4f reprojectMatrix,
+            int width,
+            int height,
+            float blendFactor,
+            float depthDilation
+    ) {
         if (!initialized) {
             initialize();
             if (!initialized) return;
@@ -266,6 +292,7 @@ public class ReprojectionShaderPass {
         bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR, previousColor, uPreviousColor, ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR);
         bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH, currentDepth, uCurrentDepth, ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH);
         bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH, previousDepth, uPreviousDepth, ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH);
+        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_ENTITY_MASK, entityMask, uEntityMask, ShaderConstants.TEXTURE_UNIT_ENTITY_MASK);
 
         // Upload Uniforms
         if (uReprojectionMatrix != -1 && reprojectMatrix != null) {

@@ -7,6 +7,7 @@ uniform sampler2D CurrentColorSampler;
 uniform sampler2D PreviousColorSampler;
 uniform sampler2D CurrentDepthSampler;
 uniform sampler2D PreviousDepthSampler;
+uniform sampler2D EntityMaskSampler;
 
 uniform mat4 ReprojectionMatrix;
 uniform vec2 ScreenSize;
@@ -14,6 +15,13 @@ uniform float BlendFactor;
 uniform float DepthDilationRadius;
 
 void main() {
+    // 0. Dynamic Entity / Held item fast-path: bypass reprojection to avoid smearing
+    float isDynamic = texture(EntityMaskSampler, texCoord).r;
+    if (isDynamic > 0.5) {
+        fragColor = texture(CurrentColorSampler, texCoord);
+        return;
+    }
+
     vec2 texelSize = 1.0 / ScreenSize;
 
     // 1. Depth sampling with 3x3 dilation (pick closest depth to prevent foreground ghosting)

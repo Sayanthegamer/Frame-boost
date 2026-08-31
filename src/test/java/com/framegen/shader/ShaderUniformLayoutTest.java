@@ -16,6 +16,7 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_SCREEN_SIZE).isEqualTo("ScreenSize");
         assertThat(ShaderConstants.UNIFORM_BLEND_FACTOR).isEqualTo("BlendFactor");
         assertThat(ShaderConstants.UNIFORM_DEPTH_DILATION).isEqualTo("DepthDilationRadius");
+        assertThat(ShaderConstants.UNIFORM_ENTITY_MASK).isEqualTo("EntityMaskSampler");
     }
 
     @Test
@@ -24,5 +25,6 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR).isEqualTo(1);
         assertThat(ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH).isEqualTo(2);
         assertThat(ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH).isEqualTo(3);
+        assertThat(ShaderConstants.TEXTURE_UNIT_ENTITY_MASK).isEqualTo(4);
     }
 }
