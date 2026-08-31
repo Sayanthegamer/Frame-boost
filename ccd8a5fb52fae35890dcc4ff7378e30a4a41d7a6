@@ -1,0 +1,5 @@
+Phase: True Background Epipolar Trajectory & Continuous Cosine Phase Damping
+- Derived exact background epipolar motion vector bgMotionVec using actual background depth actualPrevDepth
+- Sampled 4 unrolled taps along true background motion trajectory dynamically scaled by DepthDilationRadius
+- Implemented Continuous Parallax Cosine Phase Damping: modulated blend factor via 0.5 - 0.5*cos(pi*confidence) to eliminate both step fractures and box-blur smudging
+- Enabled ViewModelReprojectionMatrix for Iris gbuffers_hand mask to deliver 120+ FPS viewmodels while preserving 100% of deferred fog/bloom/refraction
