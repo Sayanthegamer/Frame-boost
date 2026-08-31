@@ -1,0 +1,3 @@
+Phase: Multi-Tap Background Depth Infill & Adaptive Compositing
+- Implemented 8-tap depth-weighted background infill search in reproject.fsh to eliminate parallax disocclusion tearing behind foreground occluders during strafing
+- Adaptive Viewmodel Compositing: Native intermediate forward hand pass on Vanilla/Sodium with dynamic LightTexture interpolation; GBuffer stencil composite on Iris deferred shader packs
