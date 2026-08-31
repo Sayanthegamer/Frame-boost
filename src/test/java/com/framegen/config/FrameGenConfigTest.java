@@ -21,6 +21,8 @@ class FrameGenConfigTest {
         assertThat(config.isVelocityGatingEnabled()).isTrue();
         assertThat(config.getMaxAngularVelocityThreshold()).isEqualTo(720.0f);
         assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(50.0f);
+        assertThat(config.getMaxAbsoluteAngleThreshold()).isEqualTo(15.0f);
+        assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(50.0f);
     }
 
     @Test
@@ -62,6 +64,18 @@ class FrameGenConfigTest {
 
         config.setMaxTranslationVelocityThreshold(1000.0f);
         assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(500.0f);
+
+        config.setMaxAbsoluteAngleThreshold(0.0f);
+        assertThat(config.getMaxAbsoluteAngleThreshold()).isEqualTo(1.0f);
+
+        config.setMaxAbsoluteAngleThreshold(180.0f);
+        assertThat(config.getMaxAbsoluteAngleThreshold()).isEqualTo(90.0f);
+
+        config.setMaxFrameDurationThresholdMs(5.0f);
+        assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(10.0f);
+
+        config.setMaxFrameDurationThresholdMs(1000.0f);
+        assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(500.0f);
     }
 
     @Test

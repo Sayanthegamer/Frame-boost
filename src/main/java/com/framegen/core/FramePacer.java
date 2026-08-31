@@ -69,7 +69,9 @@ public class FramePacer {
 
         boolean isGated = config.isVelocityGatingEnabled() && matrixTracker.isVelocityGated(
                 config.getMaxAngularVelocityThreshold(),
-                config.getMaxTranslationVelocityThreshold()
+                config.getMaxTranslationVelocityThreshold(),
+                config.getMaxAbsoluteAngleThreshold(),
+                config.getMaxFrameDurationThresholdMs()
         );
         this.lastFrameGated = isGated;
 

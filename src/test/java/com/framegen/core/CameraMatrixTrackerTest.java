@@ -155,17 +155,35 @@ class CameraMatrixTrackerTest {
     }
 
     @Test
-    void testViewmodelReprojectionMatrixIsRotationOnly() {
+    void testLagSpikeTriggersGatingEvenWithLowAngularRate() {
         Matrix4f view1 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
-        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        // Rotate 20 degrees yaw during a 200ms lag spike (angular rate = 100 deg/sec < 720 deg/sec threshold)
+        float rad20 = (float) Math.toRadians(20.0);
+        Matrix4f view2 = new Matrix4f().lookAt(0, 0, 0, (float) Math.sin(rad20), 0, -(float) Math.cos(rad20), 0, 1, 0);
 
-        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
-        // Teleport camera 50 blocks without rotating
-        tracker.updateMatrices(view2, proj, 50.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 0.200);
+        tracker.updateMatrices(view2, proj, 0.0, 0.0, 0.0, 0.200);
 
-        Matrix4f vmMat = tracker.getViewmodelReprojectionMatrix();
-        assertThat(vmMat).isNotNull();
-        // Since rotation is zero, viewmodel reprojection should be identity
-        assertThat(vmMat.isFinite()).isTrue();
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(20.0f, within(1e-2f));
+        assertThat(tracker.getAngularVelocityDegPerSec()).isCloseTo(100.0f, within(5.0f));
+        // Multi-condition gating catches the 200ms frame duration ceiling (> 50ms) and absolute angle ceiling (> 15 deg)
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f, 15.0f, 50.0f)).isTrue();
+    }
+
+    @Test
+    void testViewmodelPoseStackUpdateWithBobbing() {
+        Matrix4f vmPose1 = new Matrix4f().translation(0.2f, -0.2f, -0.4f);
+        // Bob hand upward and sway slightly
+        Matrix4f vmPose2 = new Matrix4f().translation(0.22f, -0.18f, -0.4f).rotateZ(0.05f);
+
+        tracker.updateMatrices(new Matrix4f(), proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateViewmodelPose(vmPose1, proj);
+
+        tracker.updateMatrices(new Matrix4f(), proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        tracker.updateViewmodelPose(vmPose2, proj);
+
+        Matrix4f vmReproj = tracker.getViewmodelReprojectionMatrix();
+        assertThat(vmReproj).isNotNull();
+        assertThat(vmReproj.isFinite()).isTrue();
     }
 }

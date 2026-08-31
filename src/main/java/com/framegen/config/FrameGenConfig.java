@@ -26,6 +26,8 @@ public class FrameGenConfig {
     private boolean velocityGatingEnabled = true;
     private float maxAngularVelocityThreshold = 720.0f; // degrees / second
     private float maxTranslationVelocityThreshold = 50.0f; // blocks / second
+    private float maxAbsoluteAngleThreshold = 15.0f; // degrees hard snap ceiling
+    private float maxFrameDurationThresholdMs = 50.0f; // ms hard lag spike ceiling (20 FPS)
 
     public FrameGenConfig() {
     }
@@ -97,6 +99,18 @@ public class FrameGenConfig {
         } else if (this.maxTranslationVelocityThreshold > 500.0f) {
             this.maxTranslationVelocityThreshold = 500.0f;
         }
+
+        if (this.maxAbsoluteAngleThreshold < 1.0f) {
+            this.maxAbsoluteAngleThreshold = 1.0f;
+        } else if (this.maxAbsoluteAngleThreshold > 90.0f) {
+            this.maxAbsoluteAngleThreshold = 90.0f;
+        }
+
+        if (this.maxFrameDurationThresholdMs < 10.0f) {
+            this.maxFrameDurationThresholdMs = 10.0f;
+        } else if (this.maxFrameDurationThresholdMs > 500.0f) {
+            this.maxFrameDurationThresholdMs = 500.0f;
+        }
     }
 
     public boolean isEnabled() {
@@ -161,6 +175,24 @@ public class FrameGenConfig {
 
     public void setMaxTranslationVelocityThreshold(float maxTranslationVelocityThreshold) {
         this.maxTranslationVelocityThreshold = maxTranslationVelocityThreshold;
+        validate();
+    }
+
+    public float getMaxAbsoluteAngleThreshold() {
+        return maxAbsoluteAngleThreshold;
+    }
+
+    public void setMaxAbsoluteAngleThreshold(float maxAbsoluteAngleThreshold) {
+        this.maxAbsoluteAngleThreshold = maxAbsoluteAngleThreshold;
+        validate();
+    }
+
+    public float getMaxFrameDurationThresholdMs() {
+        return maxFrameDurationThresholdMs;
+    }
+
+    public void setMaxFrameDurationThresholdMs(float maxFrameDurationThresholdMs) {
+        this.maxFrameDurationThresholdMs = maxFrameDurationThresholdMs;
         validate();
     }
 }

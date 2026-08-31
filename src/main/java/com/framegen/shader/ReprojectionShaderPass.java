@@ -98,14 +98,13 @@ public class ReprojectionShaderPass {
             bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
             vec4 prevColor = currColor;
             if (validUV) {
-                vec2 clampedUV = clamp(prevUV, 0.0, 1.0);
-                float actualPrevDepth = texture(PreviousDepthSampler, clampedUV).r;
+                float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
                 float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
                 float depthDiff = abs(actualPrevDepth - expectedPrevDepth);
                 float depthThreshold = isViewmodel ? 0.08 : max(0.02 * max(expectedPrevDepth, 0.001), 0.005);
 
                 if (depthDiff <= depthThreshold) {
-                    vec4 rawPrev = texture(PreviousColorSampler, clampedUV);
+                    vec4 rawPrev = texture(PreviousColorSampler, prevUV);
                     prevColor = clamp(rawPrev, minColor, maxColor);
                 } else {
                     prevColor = currColor;

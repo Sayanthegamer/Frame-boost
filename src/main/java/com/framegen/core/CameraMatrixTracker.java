@@ -17,6 +17,8 @@ public class CameraMatrixTracker {
 
     private final Matrix4f reprojectionMatrix = new Matrix4f();
     private final Matrix4f viewmodelReprojectionMatrix = new Matrix4f();
+    private final Matrix4f currentViewmodelMatrix = new Matrix4f();
+    private final Matrix4f previousViewmodelMatrix = new Matrix4f();
 
     private double currentCamX, currentCamY, currentCamZ;
     private double previousCamX, previousCamY, previousCamZ;
@@ -25,6 +27,7 @@ public class CameraMatrixTracker {
     private float translationDelta = 0.0f;
     private float angularVelocityDegPerSec = 0.0f;
     private float translationVelocityBlocksPerSec = 0.0f;
+    private float lastFrameDurationSeconds = 0.016666f;
 
     private boolean hasPreviousFrame = false;
     private boolean initialized = false;
@@ -46,6 +49,7 @@ public class CameraMatrixTracker {
     }
 
     public synchronized void updateMatrices(Matrix4f viewMatrix, Matrix4f projectionMatrix, double camX, double camY, double camZ, double frameDeltaSeconds) {
+        this.lastFrameDurationSeconds = (float) frameDeltaSeconds;
         if (initialized) {
             previousViewMatrix.set(currentViewMatrix);
             previousProjectionMatrix.set(currentProjectionMatrix);
@@ -102,7 +106,7 @@ public class CameraMatrixTracker {
                 reprojectionMatrix.identity();
             }
 
-            // Dedicated Viewmodel rotation-only reprojection
+            // Dedicated Viewmodel rotation-only fallback (if pose not explicitly set via updateViewmodelPose)
             viewmodelReprojectionMatrix.set(previousViewProjectionMatrix)
                     .mul(currentInvViewProjectionMatrix);
 
@@ -114,6 +118,22 @@ public class CameraMatrixTracker {
             this.translationDelta = 0.0f;
             this.angularVelocityDegPerSec = 0.0f;
             this.translationVelocityBlocksPerSec = 0.0f;
+        }
+    }
+
+    public synchronized void updateViewmodelPose(Matrix4f viewmodelPoseMatrix, Matrix4f projectionMatrix) {
+        if (hasPreviousFrame) {
+            previousViewmodelMatrix.set(currentViewmodelMatrix);
+        }
+        currentViewmodelMatrix.set(viewmodelPoseMatrix);
+
+        if (hasPreviousFrame) {
+            Matrix4f prevVMVP = new Matrix4f(previousProjectionMatrix).mul(previousViewmodelMatrix);
+            Matrix4f currVMVP = new Matrix4f(projectionMatrix).mul(currentViewmodelMatrix);
+            Matrix4f currInvVMVP = new Matrix4f(currVMVP).invert();
+            if (currInvVMVP.isFinite()) {
+                viewmodelReprojectionMatrix.set(prevVMVP).mul(currInvVMVP);
+            }
         }
     }
 
@@ -170,11 +190,28 @@ public class CameraMatrixTracker {
         return translationVelocityBlocksPerSec;
     }
 
+    public synchronized float getLastFrameDurationSeconds() {
+        return lastFrameDurationSeconds;
+    }
+
     public synchronized boolean isVelocityGated(float maxAngularVelocityDegPerSec, float maxTranslationVelocityBlocksPerSec) {
+        return isVelocityGated(maxAngularVelocityDegPerSec, maxTranslationVelocityBlocksPerSec, 15.0f, 50.0f);
+    }
+
+    public synchronized boolean isVelocityGated(
+            float maxAngularVelocityDegPerSec,
+            float maxTranslationVelocityBlocksPerSec,
+            float maxAbsoluteAngleThreshold,
+            float maxFrameDurationThresholdMs
+    ) {
         if (!hasPreviousFrame) {
             return false;
         }
-        return angularVelocityDegPerSec > maxAngularVelocityDegPerSec || translationVelocityBlocksPerSec > maxTranslationVelocityBlocksPerSec;
+        boolean rateGated = angularVelocityDegPerSec > maxAngularVelocityDegPerSec
+                || translationVelocityBlocksPerSec > maxTranslationVelocityBlocksPerSec;
+        boolean lagOrSnapGated = angularDeltaDegrees > maxAbsoluteAngleThreshold
+                || lastFrameDurationSeconds > (maxFrameDurationThresholdMs / 1000.0f);
+        return rateGated || lagOrSnapGated;
     }
 
     public Matrix4f getCurrentViewMatrix() {
