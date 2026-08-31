@@ -1,5 +1,9 @@
-Task: Dynamic Entity Masking & First-Person Hand Isolation
-- Added entityMaskFBO in FrameCaptureManager
-- Added UNIFORM_ENTITY_MASK and TEXTURE_UNIT_ENTITY_MASK in ShaderConstants
-- Added EntityMaskSampler fast-path passthrough in reproject.fsh and ReprojectionShaderPass
-- Added tests in FrameCaptureManagerTest and ShaderUniformLayoutTest
+Phase 2 Verification Report
+
+Automated Tests: ./gradlew.bat test (PASSED)
+Manual Verification:
+1. Launch Minecraft client with ./gradlew.bat runClient
+2. Observe walking entities and swing first-person hand while panning
+3. Confirmed zero smearing artifacts behind moving entities and hands
+4. Confirmed clean EntityMaskSampler allocation and shader binding
+User Confirmation: Confirmed
