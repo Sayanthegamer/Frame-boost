@@ -1,18 +1,18 @@
 # Implementation Plan: Camera Velocity Gating & Dynamic Entity Masking
 
 ## Phase 1: Angular Velocity Tracker & Velocity-Gated Reprojection Fallback
-- [ ] Task: Write failing unit tests for camera angular velocity calculation & velocity gating in `CameraMatrixTrackerTest` (Red)
-    - [ ] Add test cases verifying $\Delta\theta$ calculation across 0°, 30°, 45°, 90°, and 180° yaw/pitch rotations
-    - [ ] Add test cases for translation velocity delta $\Delta d$
-    - [ ] Add test cases verifying `isVelocityGated()` threshold evaluation
-- [ ] Task: Implement angular & translation delta tracking in `CameraMatrixTracker` (Green)
-    - [ ] Extract camera forward direction vector from view matrix
-    - [ ] Compute angular delta via dot product clamp & arccos
-    - [ ] Store instantaneous $\Delta\theta$ and $\Delta d$
-- [ ] Task: Add velocity gating configuration & passthrough control in `FrameGenConfig` and `FramePacer` (Green)
-    - [ ] Add `enableVelocityGating`, `maxAngularVelocityThreshold`, and `maxTranslationVelocityThreshold` to `FrameGenConfig`
-    - [ ] Update `FrameGenConfigTest`
-    - [ ] Integrate velocity gating check into `FramePacer` to bypass `ReprojectionShaderPass` during high-velocity frames
+- [x] Task: Write failing unit tests for camera angular velocity calculation & velocity gating in `CameraMatrixTrackerTest` (Red) [4041411]
+    - [x] Add test cases verifying $\Delta\theta$ calculation across 0°, 30°, 45°, 90°, and 180° yaw/pitch rotations
+    - [x] Add test cases for translation velocity delta $\Delta d$
+    - [x] Add test cases verifying `isVelocityGated()` threshold evaluation
+- [x] Task: Implement angular & translation delta tracking in `CameraMatrixTracker` (Green) [4041411]
+    - [x] Extract camera forward direction vector from view matrix
+    - [x] Compute angular delta via dot product clamp & arccos
+    - [x] Store instantaneous $\Delta\theta$ and $\Delta d$
+- [x] Task: Add velocity gating configuration & passthrough control in `FrameGenConfig` and `FramePacer` (Green) [93cafd0]
+    - [x] Add `enableVelocityGating`, `maxAngularVelocityThreshold`, and `maxTranslationVelocityThreshold` to `FrameGenConfig`
+    - [x] Update `FrameGenConfigTest`
+    - [x] Integrate velocity gating check into `FramePacer` to bypass `ReprojectionShaderPass` during high-velocity frames
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Dynamic Entity Masking & First-Person Hand Isolation
