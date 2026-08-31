@@ -1,6 +1,6 @@
 # Implementation Plan: Camera Velocity Gating & Dynamic Entity Masking
 
-## Phase 1: Angular Velocity Tracker & Velocity-Gated Reprojection Fallback
+## Phase 1: Angular Velocity Tracker & Velocity-Gated Reprojection Fallback [checkpoint: 93cafd0]
 - [x] Task: Write failing unit tests for camera angular velocity calculation & velocity gating in `CameraMatrixTrackerTest` (Red) [4041411]
     - [x] Add test cases verifying $\Delta\theta$ calculation across 0°, 30°, 45°, 90°, and 180° yaw/pitch rotations
     - [x] Add test cases for translation velocity delta $\Delta d$
@@ -13,7 +13,7 @@
     - [x] Add `enableVelocityGating`, `maxAngularVelocityThreshold`, and `maxTranslationVelocityThreshold` to `FrameGenConfig`
     - [x] Update `FrameGenConfigTest`
     - [x] Integrate velocity gating check into `FramePacer` to bypass `ReprojectionShaderPass` during high-velocity frames
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [93cafd0]
 
 ## Phase 2: Dynamic Entity Masking & First-Person Hand Isolation
 - [ ] Task: Write failing unit tests & layout verification for entity mask buffers in `ShaderUniformLayoutTest` and `FrameCaptureManagerTest` (Red)
