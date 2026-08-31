@@ -1,0 +1,4 @@
+Task: Add velocity gating configuration & passthrough control in FrameGenConfig and FramePacer
+- Added velocityGatingEnabled, maxAngularVelocityThreshold, maxTranslationVelocityThreshold to FrameGenConfig
+- Added isGated check in FramePacer onRenderTick to set effective blend to 0.0 for seamless raw frame passthrough
+- Updated FrameGenConfigTest and FramePacerTest
