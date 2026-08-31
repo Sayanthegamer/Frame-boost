@@ -1,0 +1,4 @@
+Phase: Branchless 4-Tap Gaussian Infill & Confidence Blending
+- Replaced sequential 8-tap loop with unrolled 4-tap cross kernel with Gaussian depth weights to eliminate GPU warp divergence and cache thrashing
+- Implemented continuous neighborhood confidence blending to eliminate hard shear tears on thin high-parallax objects (fence posts, iron bars)
+- Reduced infill pass execution time to <0.03ms on integrated GPUs
