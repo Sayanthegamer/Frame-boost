@@ -2,19 +2,24 @@ package com.framegen.shader;
 
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.framegen.config.FrameGenConfig;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL33;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
@@ -42,124 +47,162 @@ public class ReprojectionShaderPass {
         uniform sampler2D CurrentDepthSampler;
         uniform sampler2D PreviousDepthSampler;
         uniform sampler2D EntityMaskSampler;
-        uniform mat4 ReprojectionMatrix;
-        uniform mat4 ViewModelReprojectionMatrix;
+        uniform mat4 MidToPrevMatrix;
+        uniform mat4 MidToCurrMatrix;
+        uniform mat4 MidToPrevSkyMatrix;
+        uniform mat4 MidToCurrSkyMatrix;
         uniform vec2 ScreenSize;
         uniform float BlendFactor;
         uniform float DepthDilationRadius;
+        uniform int uDebugLadderMode;
+
         void main() {
-            vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
-            float closestDepth = texture(CurrentDepthSampler, texCoord).r;
+            // 1. Initial depth seeds from both frames at current midpoint screen coordinate
+            float dN = texture(CurrentDepthSampler, texCoord).r;
+            float dP = texture(PreviousDepthSampler, texCoord).r;
 
-            // Fast-path: Sky / infinite background in Reverse-Z is depth 0.0 (requires no reprojection)
-            if (closestDepth <= 0.0001) {
-                fragColor = texture(CurrentColorSampler, texCoord);
-                return;
-            }
-
-            vec4 maskSample = texture(EntityMaskSampler, texCoord);
-            bool isViewmodel = (maskSample.g > 0.5) || (maskSample.r > 0.5 && closestDepth > 0.95);
-            bool isDynamicMob = (maskSample.r > 0.5 && !isViewmodel);
-
-            if (!isViewmodel && DepthDilationRadius > 0.0) {
-                for (int y = -1; y <= 1; ++y) {
-                    for (int x = -1; x <= 1; ++x) {
-                        vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
-                        float d = texture(CurrentDepthSampler, texCoord + offset).r;
-                        closestDepth = max(closestDepth, d);
+            // Iterative refinement pass 1 & 2 for Frame N candidate
+            for (int i = 0; i < 2; ++i) {
+                float zN = 1.0 - dN * 2.0;
+                vec4 pN = vec4(texCoord * 2.0 - 1.0, zN, 1.0);
+                vec4 cN = MidToCurrMatrix * pN;
+                if (cN.w > 0.0) {
+                    vec2 uvN = (cN.xy / max(cN.w, 0.00001)) * 0.5 + 0.5;
+                    if (uvN.x >= 0.0 && uvN.x <= 1.0 && uvN.y >= 0.0 && uvN.y <= 1.0) {
+                        dN = texture(CurrentDepthSampler, uvN).r;
                     }
                 }
             }
 
-            float zNDC = 1.0 - closestDepth * 2.0;
-            vec4 currClip = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
-            mat4 activeReproj = isViewmodel ? ViewModelReprojectionMatrix : ReprojectionMatrix;
-            vec4 prevClip = activeReproj * currClip;
-            vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
-            vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
-
-            if (isDynamicMob) {
-                float rawEntityDepth = texture(CurrentDepthSampler, texCoord).r;
-                float reprojectedOccluderDepth = (1.0 - prevNDC.z) * 0.5;
-                if (rawEntityDepth >= reprojectedOccluderDepth - 0.005) {
-                    fragColor = texture(CurrentColorSampler, texCoord);
-                    return;
+            // Iterative refinement pass 1 & 2 for Frame N-1 candidate
+            for (int i = 0; i < 2; ++i) {
+                float zP = 1.0 - dP * 2.0;
+                vec4 pP = vec4(texCoord * 2.0 - 1.0, zP, 1.0);
+                vec4 cP = MidToPrevMatrix * pP;
+                if (cP.w > 0.0) {
+                    vec2 uvP = (cP.xy / max(cP.w, 0.00001)) * 0.5 + 0.5;
+                    if (uvP.x >= 0.0 && uvP.x <= 1.0 && uvP.y >= 0.0 && uvP.y <= 1.0) {
+                        dP = texture(PreviousDepthSampler, uvP).r;
+                    }
                 }
             }
 
-            vec4 currColor = texture(CurrentColorSampler, texCoord);
-            vec4 minColor = currColor;
-            vec4 maxColor = currColor;
-            for (int y = -1; y <= 1; ++y) {
-                for (int x = -1; x <= 1; ++x) {
-                    vec2 offset = vec2(float(x), float(y)) * texelSize;
-                    vec4 neighbor = texture(CurrentColorSampler, texCoord + offset);
-                    minColor = min(minColor, neighbor);
-                    maxColor = max(maxColor, neighbor);
+            // Arbitrate Single Midpoint Surface:
+            // In Reverse-Z, larger depth is nearer surface: dMid = max(dN, dP)
+            float dMid = max(dN, dP);
+
+            // Depth dilation around foreground silhouettes if configured
+            if (DepthDilationRadius > 0.0 && dMid > 0.0001) {
+                vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
+                for (int y = -1; y <= 1; ++y) {
+                    for (int x = -1; x <= 1; ++x) {
+                        if (x == 0 && y == 0) continue;
+                        vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
+                        float dSampleN = texture(CurrentDepthSampler, texCoord + offset).r;
+                        float dSampleP = texture(PreviousDepthSampler, texCoord + offset).r;
+                        dMid = max(dMid, max(dSampleN, dSampleP));
+                    }
                 }
             }
 
-            bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
-            vec4 prevColor = currColor;
-            if (validUV) {
-                float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
-                float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
-                float depthDiff = abs(actualPrevDepth - expectedPrevDepth);
-                float depthThreshold = isViewmodel ? 0.08 : max(0.02 * max(expectedPrevDepth, 0.001), 0.005);
+            // Sky Decision: Sky (dMid <= 0.0001) is evaluated strictly after refinement
+            if (dMid <= 0.0001) {
+                vec4 skyPoint = vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+                vec4 cSkyCurr = MidToCurrSkyMatrix * skyPoint;
+                vec4 cSkyPrev = MidToPrevSkyMatrix * skyPoint;
 
-                if (depthDiff <= depthThreshold) {
-                    vec4 rawPrev = texture(PreviousColorSampler, prevUV);
-                    prevColor = clamp(rawPrev, minColor, maxColor);
+                vec2 uvSkyCurr = (cSkyCurr.xy / max(cSkyCurr.w, 0.00001)) * 0.5 + 0.5;
+                vec2 uvSkyPrev = (cSkyPrev.xy / max(cSkyPrev.w, 0.00001)) * 0.5 + 0.5;
+
+                bool skyCurrValid = (uvSkyCurr.x >= 0.0 && uvSkyCurr.x <= 1.0 && uvSkyCurr.y >= 0.0 && uvSkyCurr.y <= 1.0 && cSkyCurr.w > 0.0);
+                bool skyPrevValid = (uvSkyPrev.x >= 0.0 && uvSkyPrev.x <= 1.0 && uvSkyPrev.y >= 0.0 && uvSkyPrev.y <= 1.0 && cSkyPrev.w > 0.0);
+
+                if (skyCurrValid && skyPrevValid) {
+                    vec4 colCurr = texture(CurrentColorSampler, uvSkyCurr);
+                    vec4 colPrev = texture(PreviousColorSampler, uvSkyPrev);
+                    fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, BlendFactor), 1.0);
+                } else if (skyCurrValid) {
+                    fragColor = vec4(texture(CurrentColorSampler, uvSkyCurr).rgb, 1.0);
+                    if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 1.0, 0.0, 1.0), 0.7);
+                } else if (skyPrevValid) {
+                    fragColor = vec4(texture(PreviousColorSampler, uvSkyPrev).rgb, 1.0);
+                    if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 0.0, 1.0, 1.0), 0.7);
                 } else {
-                    float zNDC_bg = 1.0 - actualPrevDepth * 2.0;
-                    vec4 bgClip = vec4(texCoord * 2.0 - 1.0, zNDC_bg, 1.0);
-                    vec4 prevBgClip = ReprojectionMatrix * bgClip;
-                    vec2 prevBgUV = (prevBgClip.xy / max(prevBgClip.w, 0.00001)) * 0.5 + 0.5;
+                    fragColor = vec4(texture(CurrentColorSampler, texCoord).rgb, 1.0);
+                    if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(1.0, 0.0, 0.0, 1.0), 0.7);
+                }
+                return;
+            }
 
-                    vec2 bgMotionVec = prevBgUV - texCoord;
-                    float bgMotionLen = length(bgMotionVec);
-                    vec2 bgMotionDir = bgMotionLen > 0.0001 ? bgMotionVec / bgMotionLen : vec2(1.0, 0.0);
+            // 2. Validate BOTH Sources against single mid-surface point P_mid
+            float zNDC = 1.0 - dMid * 2.0;
+            vec4 pMid = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
 
-                    float parallaxScale = max(bgMotionLen * 1.5, length(texelSize) * 2.0) * max(DepthDilationRadius, 1.0);
+            vec4 clipN = MidToCurrMatrix * pMid;
+            vec3 ndcN = clipN.xyz / max(clipN.w, 0.00001);
+            vec2 uvN = ndcN.xy * 0.5 + 0.5;
+            float expectedDepthN = (1.0 - ndcN.z) * 0.5;
 
-                    vec2 uv0 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
-                    vec2 uv1 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 1.0), 0.0, 1.0);
-                    vec2 uv2 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 2.0), 0.0, 1.0);
-                    vec2 uv3 = clamp(prevBgUV - bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
+            vec4 clipP = MidToPrevMatrix * pMid;
+            vec3 ndcP = clipP.xyz / max(clipP.w, 0.00001);
+            vec2 uvP = ndcP.xy * 0.5 + 0.5;
+            float expectedDepthP = (1.0 - ndcP.z) * 0.5;
 
-                    float d0 = texture(PreviousDepthSampler, uv0).r;
-                    float d1 = texture(PreviousDepthSampler, uv1).r;
-                    float d2 = texture(PreviousDepthSampler, uv2).r;
-                    float d3 = texture(PreviousDepthSampler, uv3).r;
+            bool uvInBoundsN = (uvN.x >= 0.0 && uvN.x <= 1.0 && uvN.y >= 0.0 && uvN.y <= 1.0 && clipN.w > 0.0);
+            bool uvInBoundsP = (uvP.x >= 0.0 && uvP.x <= 1.0 && uvP.y >= 0.0 && uvP.y <= 1.0 && clipP.w > 0.0);
 
-                    float invTwoSigmaSq = 1.0 / (2.0 * max(depthThreshold * depthThreshold * 2.25, 0.0001));
-                    float diff0 = d0 - actualPrevDepth;
-                    float diff1 = d1 - actualPrevDepth;
-                    float diff2 = d2 - actualPrevDepth;
-                    float diff3 = d3 - actualPrevDepth;
+            float tauN = max(0.02 * max(expectedDepthN, 0.001), 0.005);
+            float tauP = max(0.02 * max(expectedDepthP, 0.001), 0.005);
 
-                    float w0 = exp(-(diff0 * diff0) * invTwoSigmaSq);
-                    float w1 = exp(-(diff1 * diff1) * invTwoSigmaSq);
-                    float w2 = exp(-(diff2 * diff2) * invTwoSigmaSq);
-                    float w3 = exp(-(diff3 * diff3) * invTwoSigmaSq);
+            bool validN = false;
+            if (uvInBoundsN) {
+                float actualDepthN = texture(CurrentDepthSampler, uvN).r;
+                validN = abs(actualDepthN - expectedDepthN) <= tauN;
+            }
 
-                    vec4 c0 = texture(PreviousColorSampler, uv0);
-                    vec4 c1 = texture(PreviousColorSampler, uv1);
-                    vec4 c2 = texture(PreviousColorSampler, uv2);
-                    vec4 c3 = texture(PreviousColorSampler, uv3);
+            bool validP = false;
+            if (uvInBoundsP) {
+                float actualDepthP = texture(PreviousDepthSampler, uvP).r;
+                validP = abs(actualDepthP - expectedDepthP) <= tauP;
+            }
 
-                    float sumWeights = w0 + w1 + w2 + w3;
-                    vec4 infilledColor = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / max(sumWeights, 0.0001);
+            // 3. Synthesis Ladder
+            if (validN && validP) {
+                vec4 currColor = texture(CurrentColorSampler, uvN);
+                vec4 prevColor = texture(PreviousColorSampler, uvP);
 
-                    float confidence = clamp(sumWeights * 0.5, 0.0, 1.0);
-                    float cosineWeight = 0.5 - 0.5 * cos(3.14159265 * confidence);
-                    vec4 blendedPrev = mix(currColor, infilledColor, cosineWeight);
-                    prevColor = clamp(blendedPrev, minColor, maxColor);
+                vec3 diff = abs(currColor.rgb - prevColor.rgb);
+                float deltaC = max(diff.r, max(diff.g, diff.b));
+                float ramp = smoothstep(0.05, 0.25, deltaC);
+
+                float wBase = BlendFactor;
+                float wPrev = wBase * (1.0 - ramp);
+                float wCurr = 1.0 - wPrev;
+
+                vec3 synth = wCurr * currColor.rgb + wPrev * prevColor.rgb;
+                fragColor = vec4(synth, 1.0);
+            } else if (validN) {
+                vec4 currColor = texture(CurrentColorSampler, uvN);
+                if (uDebugLadderMode == 1) {
+                    fragColor = vec4(mix(currColor.rgb, vec3(0.0, 1.0, 0.0), 0.7), 1.0);
+                } else {
+                    fragColor = vec4(currColor.rgb, 1.0);
+                }
+            } else if (validP) {
+                vec4 prevColor = texture(PreviousColorSampler, uvP);
+                if (uDebugLadderMode == 1) {
+                    fragColor = vec4(mix(prevColor.rgb, vec3(0.0, 0.0, 1.0), 0.7), 1.0);
+                } else {
+                    fragColor = vec4(prevColor.rgb, 1.0);
                 }
             } else {
-                prevColor = currColor;
+                vec4 fallbackColor = texture(CurrentColorSampler, texCoord);
+                if (uDebugLadderMode == 1) {
+                    fragColor = vec4(mix(fallbackColor.rgb, vec3(1.0, 0.0, 0.0), 0.7), 1.0);
+                } else {
+                    fragColor = vec4(fallbackColor.rgb, 1.0);
+                }
             }
-            fragColor = mix(currColor, prevColor, BlendFactor);
         }
         """;
 
@@ -177,7 +220,7 @@ public class ReprojectionShaderPass {
             vec3 diff = abs(mainColor.rgb - worldColor.rgb);
             float maxDiff = max(diff.r, max(diff.g, diff.b));
             float isHud = step(0.08, maxDiff);
-            fragColor = mix(interColor, mainColor, isHud);
+            fragColor = vec4(mix(interColor.rgb, mainColor.rgb, isHud), 1.0);
         }
         """;
 
@@ -186,6 +229,8 @@ public class ReprojectionShaderPass {
     private int vaoId = 0;
     private int vboId = 0;
     private int fboId = 0;
+    private int colorSamplerId = 0;
+    private int depthSamplerId = 0;
     private boolean initialized = false;
 
     // Uniform locations - Reprojection
@@ -199,6 +244,11 @@ public class ReprojectionShaderPass {
     private int uScreenSize = -1;
     private int uBlendFactor = -1;
     private int uDepthDilation = -1;
+    private int uMidToPrevMatrix = -1;
+    private int uMidToCurrMatrix = -1;
+    private int uMidToPrevSkyMatrix = -1;
+    private int uMidToCurrSkyMatrix = -1;
+    private int uDebugLadderMode = -1;
 
     // Uniform locations - HUD Composite
     private int uHudIntermediate = -1;
@@ -240,6 +290,11 @@ public class ReprojectionShaderPass {
             GL20.glAttachShader(hudProgramId, hudFsh);
             GL20.glLinkProgram(hudProgramId);
 
+            if (GL20.glGetProgrami(hudProgramId, GL20.GL_LINK_STATUS) == GL11.GL_FALSE) {
+                String log = GL20.glGetProgramInfoLog(hudProgramId);
+                throw new RuntimeException("Failed to link HUD composite shader program: " + log);
+            }
+
             GL20.glDeleteShader(vsh);
             GL20.glDeleteShader(hudFsh);
 
@@ -254,16 +309,35 @@ public class ReprojectionShaderPass {
             uScreenSize = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_SCREEN_SIZE);
             uBlendFactor = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_BLEND_FACTOR);
             uDepthDilation = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEPTH_DILATION);
+            uMidToPrevMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_MID_TO_PREV_MATRIX);
+            uMidToCurrMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_MID_TO_CURR_MATRIX);
+            uMidToPrevSkyMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_MID_TO_PREV_SKY_MATRIX);
+            uMidToCurrSkyMatrix = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_MID_TO_CURR_SKY_MATRIX);
+            uDebugLadderMode = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEBUG_LADDER_MODE);
 
             // Query uniform locations - HUD Composite
             uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, "IntermediateSampler");
             uHudMain = GL20.glGetUniformLocation(hudProgramId, "MainColorSampler");
             uHudWorldOnly = GL20.glGetUniformLocation(hudProgramId, "WorldOnlySampler");
 
+            // OpenGL 3.3 Sampler Objects (Zero texture parameter mutation)
+            colorSamplerId = GL33.glGenSamplers();
+            GL33.glSamplerParameteri(colorSamplerId, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+            GL33.glSamplerParameteri(colorSamplerId, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+            GL33.glSamplerParameteri(colorSamplerId, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL33.glSamplerParameteri(colorSamplerId, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+
+            depthSamplerId = GL33.glGenSamplers();
+            GL33.glSamplerParameteri(depthSamplerId, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL33.glSamplerParameteri(depthSamplerId, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL33.glSamplerParameteri(depthSamplerId, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL33.glSamplerParameteri(depthSamplerId, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            GL33.glSamplerParameteri(depthSamplerId, GL14.GL_TEXTURE_COMPARE_MODE, GL11.GL_NONE);
+
             setupFullscreenQuad();
             fboId = GL30.glGenFramebuffers();
             initialized = true;
-            LOGGER.info("ReprojectionShaderPass and HUD Composite Shader initialized successfully.");
+            LOGGER.info("ReprojectionShaderPass, HUD Composite Shader, and Samplers initialized successfully.");
         } catch (Throwable t) {
             LOGGER.error("Failed to initialize ReprojectionShaderPass", t);
             destroy();
@@ -271,35 +345,38 @@ public class ReprojectionShaderPass {
     }
 
     private void setupFullscreenQuad() {
-        float[] quadVertices = {
-                -1.0f, -1.0f,  0.0f, 0.0f,
-                 1.0f, -1.0f,  1.0f, 0.0f,
-                 1.0f,  1.0f,  1.0f, 1.0f,
-                -1.0f, -1.0f,  0.0f, 0.0f,
-                 1.0f,  1.0f,  1.0f, 1.0f,
-                -1.0f,  1.0f,  0.0f, 1.0f
-        };
+        try (GlStateSnapshot ignored = GlStateSnapshot.capture()) {
+            float[] quadVertices = {
+                    -1.0f, -1.0f,  0.0f, 0.0f,
+                     1.0f, -1.0f,  1.0f, 0.0f,
+                     1.0f,  1.0f,  1.0f, 1.0f,
+                    -1.0f, -1.0f,  0.0f, 0.0f,
+                     1.0f,  1.0f,  1.0f, 1.0f,
+                    -1.0f,  1.0f,  0.0f, 1.0f
+            };
 
-        vaoId = GL30.glGenVertexArrays();
-        vboId = GL15.glGenBuffers();
+            vaoId = GL30.glGenVertexArrays();
+            vboId = GL15.glGenBuffers();
 
-        GL30.glBindVertexArray(vaoId);
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
+            GL30.glBindVertexArray(vaoId);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
 
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(quadVertices.length);
-        buffer.put(quadVertices).flip();
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(quadVertices.length);
+            buffer.put(quadVertices).flip();
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
 
-        GL20.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 0);
-        GL20.glEnableVertexAttribArray(0);
+            GL20.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 0);
+            GL20.glEnableVertexAttribArray(0);
 
-        GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES);
-        GL20.glEnableVertexAttribArray(1);
+            GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 4 * Float.BYTES, 2 * Float.BYTES);
+            GL20.glEnableVertexAttribArray(1);
 
-        GL30.glBindVertexArray(0);
+            GL30.glBindVertexArray(0);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+        }
     }
 
-    public synchronized void render(
+    public synchronized boolean render(
             GpuTexture currentColor,
             GpuTexture previousColor,
             GpuTexture currentDepth,
@@ -311,10 +388,10 @@ public class ReprojectionShaderPass {
             float blendFactor,
             float depthDilation
     ) {
-        render(currentColor, previousColor, currentDepth, previousDepth, null, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
+        return render(currentColor, previousColor, currentDepth, previousDepth, null, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
     }
 
-    public synchronized void render(
+    public synchronized boolean render(
             GpuTexture currentColor,
             GpuTexture previousColor,
             GpuTexture currentDepth,
@@ -327,10 +404,10 @@ public class ReprojectionShaderPass {
             float blendFactor,
             float depthDilation
     ) {
-        render(currentColor, previousColor, currentDepth, previousDepth, entityMask, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
+        return render(currentColor, previousColor, currentDepth, previousDepth, entityMask, outputColor, reprojectMatrix, reprojectMatrix, width, height, blendFactor, depthDilation);
     }
 
-    public synchronized void render(
+    public synchronized boolean render(
             GpuTexture currentColor,
             GpuTexture previousColor,
             GpuTexture currentDepth,
@@ -344,66 +421,138 @@ public class ReprojectionShaderPass {
             float blendFactor,
             float depthDilation
     ) {
+        return render(currentColor, previousColor, currentDepth, previousDepth, entityMask, outputColor,
+                reprojectMatrix, reprojectMatrix, reprojectMatrix, reprojectMatrix,
+                width, height, blendFactor, depthDilation, false);
+    }
+
+    public synchronized boolean render(
+            GpuTexture currentColor,
+            GpuTexture previousColor,
+            GpuTexture currentDepth,
+            GpuTexture previousDepth,
+            GpuTexture entityMask,
+            GpuTexture outputColor,
+            Matrix4f midToPrevMatrix,
+            Matrix4f midToCurrMatrix,
+            Matrix4f midToPrevSkyMatrix,
+            Matrix4f midToCurrSkyMatrix,
+            int width,
+            int height,
+            float blendFactor,
+            float depthDilation,
+            boolean debugLadderMode
+    ) {
         if (!initialized) {
             initialize();
-            if (!initialized) return;
+            if (!initialized) return false;
         }
 
         int targetTexId = getGlTextureId(outputColor != null ? outputColor : currentColor);
-        if (targetTexId == 0) return;
+        if (targetTexId == 0) return false;
 
-        // Bind destination FBO
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
-        GL11.glViewport(0, 0, width, height);
+        GlStateProbe probeBefore = (FrameGenConfig.getInstance() != null && FrameGenConfig.getInstance().isDebugLogGlDrift()) ? GlStateProbe.capture() : null;
 
-        GL20.glUseProgram(programId);
+        try (GlStateSnapshot state = GlStateSnapshot.capture()) {
+            // Establish clean quad pipeline state
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_STENCIL_TEST);
+            GL11.glColorMask(true, true, true, true);
 
-        // Bind Textures
-        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_CURRENT_COLOR, currentColor, uCurrentColor, ShaderConstants.TEXTURE_UNIT_CURRENT_COLOR);
-        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR, previousColor, uPreviousColor, ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR);
-        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH, currentDepth, uCurrentDepth, ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH);
-        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH, previousDepth, uPreviousDepth, ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH);
-        bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_ENTITY_MASK, entityMask, uEntityMask, ShaderConstants.TEXTURE_UNIT_ENTITY_MASK);
+            // Bind destination FBO
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
 
-        // Upload Uniforms
-        if (uReprojectionMatrix != -1 && reprojectMatrix != null) {
-            matrixBuffer.clear();
-            reprojectMatrix.get(matrixBuffer);
-            GL20.glUniformMatrix4fv(uReprojectionMatrix, false, matrixBuffer);
-        }
+            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                LOGGER.warn("Intermediate framebuffer incomplete: 0x{}", Integer.toHexString(status));
+                return false;
+            }
 
-        if (uViewModelReprojectionMatrix != -1) {
-            Matrix4f vmMat = viewmodelReprojectMatrix != null ? viewmodelReprojectMatrix : reprojectMatrix;
-            if (vmMat != null) {
+            GL11.glViewport(0, 0, width, height);
+            GL20.glUseProgram(programId);
+
+            // Bind Textures & Sampler Objects (Zero texture mutation)
+            bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_CURRENT_COLOR, currentColor, uCurrentColor, ShaderConstants.TEXTURE_UNIT_CURRENT_COLOR, colorSamplerId);
+            bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR, previousColor, uPreviousColor, ShaderConstants.TEXTURE_UNIT_PREVIOUS_COLOR, colorSamplerId);
+            bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH, currentDepth, uCurrentDepth, ShaderConstants.TEXTURE_UNIT_CURRENT_DEPTH, depthSamplerId);
+            bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH, previousDepth, uPreviousDepth, ShaderConstants.TEXTURE_UNIT_PREVIOUS_DEPTH, depthSamplerId);
+            bindTexture(GL13.GL_TEXTURE0 + ShaderConstants.TEXTURE_UNIT_ENTITY_MASK, entityMask, uEntityMask, ShaderConstants.TEXTURE_UNIT_ENTITY_MASK, colorSamplerId);
+
+            // Upload Midpoint & Sky Uniforms
+            if (uMidToPrevMatrix != -1 && midToPrevMatrix != null) {
+                matrixBuffer.clear();
+                midToPrevMatrix.get(matrixBuffer);
+                GL20.glUniformMatrix4fv(uMidToPrevMatrix, false, matrixBuffer);
+            }
+
+            if (uMidToCurrMatrix != -1 && midToCurrMatrix != null) {
+                matrixBuffer.clear();
+                midToCurrMatrix.get(matrixBuffer);
+                GL20.glUniformMatrix4fv(uMidToCurrMatrix, false, matrixBuffer);
+            }
+
+            if (uMidToPrevSkyMatrix != -1 && midToPrevSkyMatrix != null) {
+                matrixBuffer.clear();
+                midToPrevSkyMatrix.get(matrixBuffer);
+                GL20.glUniformMatrix4fv(uMidToPrevSkyMatrix, false, matrixBuffer);
+            }
+
+            if (uMidToCurrSkyMatrix != -1 && midToCurrSkyMatrix != null) {
+                matrixBuffer.clear();
+                midToCurrSkyMatrix.get(matrixBuffer);
+                GL20.glUniformMatrix4fv(uMidToCurrSkyMatrix, false, matrixBuffer);
+            }
+
+            // Backwards-compatible legacy uniforms
+            if (uReprojectionMatrix != -1 && midToPrevMatrix != null) {
+                matrixBuffer.clear();
+                midToPrevMatrix.get(matrixBuffer);
+                GL20.glUniformMatrix4fv(uReprojectionMatrix, false, matrixBuffer);
+            }
+
+            if (uViewModelReprojectionMatrix != -1 && midToPrevMatrix != null) {
                 vmMatrixBuffer.clear();
-                vmMat.get(vmMatrixBuffer);
+                midToPrevMatrix.get(vmMatrixBuffer);
                 GL20.glUniformMatrix4fv(uViewModelReprojectionMatrix, false, vmMatrixBuffer);
             }
+
+            if (uScreenSize != -1) {
+                GL20.glUniform2f(uScreenSize, (float) width, (float) height);
+            }
+
+            if (uBlendFactor != -1) {
+                GL20.glUniform1f(uBlendFactor, blendFactor);
+            }
+
+            if (uDepthDilation != -1) {
+                GL20.glUniform1f(uDepthDilation, depthDilation);
+            }
+
+            if (uDebugLadderMode != -1) {
+                GL20.glUniform1i(uDebugLadderMode, debugLadderMode ? 1 : 0);
+            }
+
+            // Draw Fullscreen Quad
+            GL30.glBindVertexArray(vaoId);
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
+
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("Error executing ReprojectionShaderPass.render", t);
+            return false;
+        } finally {
+            if (probeBefore != null) {
+                GlStateProbe probeAfter = GlStateProbe.capture();
+                probeBefore.compareAndLog("ReprojectionShaderPass.render", probeAfter);
+            }
         }
-
-        if (uScreenSize != -1) {
-            GL20.glUniform2f(uScreenSize, (float) width, (float) height);
-        }
-
-        if (uBlendFactor != -1) {
-            GL20.glUniform1f(uBlendFactor, blendFactor);
-        }
-
-        if (uDepthDilation != -1) {
-            GL20.glUniform1f(uDepthDilation, depthDilation);
-        }
-
-        // Draw Fullscreen Quad
-        GL30.glBindVertexArray(vaoId);
-        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
-        GL30.glBindVertexArray(0);
-
-        GL20.glUseProgram(0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
     }
 
-    public synchronized void compositeHud(
+    public synchronized boolean compositeHud(
             GpuTexture intermediateTexture,
             GpuTexture mainTextureWithHud,
             GpuTexture worldTextureOnly,
@@ -413,39 +562,62 @@ public class ReprojectionShaderPass {
     ) {
         if (!initialized) {
             initialize();
-            if (!initialized) return;
+            if (!initialized) return false;
         }
 
         int targetTexId = getGlTextureId(outputTexture != null ? outputTexture : intermediateTexture);
-        if (targetTexId == 0) return;
+        if (targetTexId == 0) return false;
 
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
-        GL11.glViewport(0, 0, width, height);
+        GlStateProbe probeBefore = (FrameGenConfig.getInstance() != null && FrameGenConfig.getInstance().isDebugLogGlDrift()) ? GlStateProbe.capture() : null;
 
-        GL20.glUseProgram(hudProgramId);
+        try (GlStateSnapshot state = GlStateSnapshot.capture()) {
+            // Establish clean quad pipeline state
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_STENCIL_TEST);
+            GL11.glColorMask(true, true, true, true);
 
-        bindTexture(GL13.GL_TEXTURE0, intermediateTexture, uHudIntermediate, 0);
-        bindTexture(GL13.GL_TEXTURE1, mainTextureWithHud, uHudMain, 1);
-        bindTexture(GL13.GL_TEXTURE2, worldTextureOnly, uHudWorldOnly, 2);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
 
-        GL30.glBindVertexArray(vaoId);
-        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
-        GL30.glBindVertexArray(0);
+            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                LOGGER.warn("HUD composite framebuffer incomplete: 0x{}", Integer.toHexString(status));
+                return false;
+            }
 
-        GL20.glUseProgram(0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+            GL11.glViewport(0, 0, width, height);
+            GL20.glUseProgram(hudProgramId);
+
+            bindTexture(GL13.GL_TEXTURE0, intermediateTexture, uHudIntermediate, 0, colorSamplerId);
+            bindTexture(GL13.GL_TEXTURE1, mainTextureWithHud, uHudMain, 1, colorSamplerId);
+            bindTexture(GL13.GL_TEXTURE2, worldTextureOnly, uHudWorldOnly, 2, colorSamplerId);
+
+            GL30.glBindVertexArray(vaoId);
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
+
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("Error executing ReprojectionShaderPass.compositeHud", t);
+            return false;
+        } finally {
+            if (probeBefore != null) {
+                GlStateProbe probeAfter = GlStateProbe.capture();
+                probeBefore.compareAndLog("ReprojectionShaderPass.compositeHud", probeAfter);
+            }
+        }
     }
 
-    private void bindTexture(int textureUnit, GpuTexture texture, int uniformLocation, int unitIndex) {
+    private void bindTexture(int textureUnit, GpuTexture texture, int uniformLocation, int unitIndex, int samplerId) {
         if (texture != null && uniformLocation != -1) {
             GL13.glActiveTexture(textureUnit);
             int glId = getGlTextureId(texture);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, 0x812F); // GL_CLAMP_TO_EDGE
+            if (samplerId != 0) {
+                GL33.glBindSampler(unitIndex, samplerId);
+            }
             GL20.glUniform1i(uniformLocation, unitIndex);
         }
     }
@@ -508,11 +680,213 @@ public class ReprojectionShaderPass {
             GL30.glDeleteFramebuffers(fboId);
             fboId = 0;
         }
+        if (colorSamplerId != 0) {
+            GL33.glDeleteSamplers(colorSamplerId);
+            colorSamplerId = 0;
+        }
+        if (depthSamplerId != 0) {
+            GL33.glDeleteSamplers(depthSamplerId);
+            depthSamplerId = 0;
+        }
         initialized = false;
     }
 
     public boolean isInitialized() {
         return initialized;
+    }
+
+    public static class GlStateSnapshot implements AutoCloseable {
+        private final int drawFbo;
+        private final int readFbo;
+        private final int program;
+        private final int vao;
+        private final int vbo;
+        private final int activeTexture;
+        private final int[] textureBindings = new int[5];
+        private final int[] samplerBindings = new int[5];
+        private final int[] viewport = new int[4];
+        private final boolean colorMaskR;
+        private final boolean colorMaskG;
+        private final boolean colorMaskB;
+        private final boolean colorMaskA;
+        private final boolean scissor;
+        private final boolean blend;
+        private final boolean depthTest;
+        private final boolean cullFace;
+        private final boolean stencilTest;
+        private final boolean srgb;
+
+        public static GlStateSnapshot capture() {
+            return new GlStateSnapshot();
+        }
+
+        private GlStateSnapshot() {
+            this.drawFbo = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            this.readFbo = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+            this.program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            this.vao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
+            this.vbo = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+            this.activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            GL11.glGetIntegerv(GL11.GL_VIEWPORT, this.viewport);
+
+            try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+                ByteBuffer maskBuf = stack.malloc(4);
+                GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, maskBuf);
+                this.colorMaskR = maskBuf.get(0) != 0;
+                this.colorMaskG = maskBuf.get(1) != 0;
+                this.colorMaskB = maskBuf.get(2) != 0;
+                this.colorMaskA = maskBuf.get(3) != 0;
+            }
+
+            for (int i = 0; i < 5; i++) {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + i);
+                this.textureBindings[i] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+                try {
+                    this.samplerBindings[i] = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+                } catch (Throwable ignored) {
+                }
+            }
+            GL13.glActiveTexture(this.activeTexture);
+
+            this.scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+            this.blend = GL11.glIsEnabled(GL11.GL_BLEND);
+            this.depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+            this.cullFace = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+            this.stencilTest = GL11.glIsEnabled(GL11.GL_STENCIL_TEST);
+            boolean srgbVal = false;
+            try {
+                srgbVal = GL11.glIsEnabled(GL30.GL_FRAMEBUFFER_SRGB);
+            } catch (Throwable ignored) {
+            }
+            this.srgb = srgbVal;
+        }
+
+        @Override
+        public void close() {
+            // Restore framebuffer bindings
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, this.drawFbo);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.readFbo);
+
+            // Restore shader program and buffer/VAO bindings
+            GL20.glUseProgram(this.program);
+            GL30.glBindVertexArray(this.vao);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.vbo);
+
+            // Restore per-unit texture and sampler bindings
+            for (int i = 0; i < 5; i++) {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + i);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBindings[i]);
+                try {
+                    GL33.glBindSampler(i, this.samplerBindings[i]);
+                } catch (Throwable ignored) {
+                }
+            }
+            GL13.glActiveTexture(this.activeTexture);
+
+            // Restore viewport & rasterizer state
+            GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
+            GL11.glColorMask(
+                    this.colorMaskR,
+                    this.colorMaskG,
+                    this.colorMaskB,
+                    this.colorMaskA
+            );
+
+            if (this.scissor) GL11.glEnable(GL11.GL_SCISSOR_TEST); else GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            if (this.blend) GL11.glEnable(GL11.GL_BLEND); else GL11.glDisable(GL11.GL_BLEND);
+            if (this.depthTest) GL11.glEnable(GL11.GL_DEPTH_TEST); else GL11.glDisable(GL11.GL_DEPTH_TEST);
+            if (this.cullFace) GL11.glEnable(GL11.GL_CULL_FACE); else GL11.glDisable(GL11.GL_CULL_FACE);
+            if (this.stencilTest) GL11.glEnable(GL11.GL_STENCIL_TEST); else GL11.glDisable(GL11.GL_STENCIL_TEST);
+            try {
+                if (this.srgb) GL11.glEnable(GL30.GL_FRAMEBUFFER_SRGB); else GL11.glDisable(GL30.GL_FRAMEBUFFER_SRGB);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    public static class GlStateProbe {
+        public final int drawFbo;
+        public final int readFbo;
+        public final int program;
+        public final int vao;
+        public final int vbo;
+        public final int activeTexture;
+        public final int[] textureBindings = new int[5];
+        public final int[] samplerBindings = new int[5];
+        public final boolean scissor;
+        public final boolean blend;
+        public final boolean depthTest;
+        public final boolean cullFace;
+
+        public static GlStateProbe capture() {
+            int drawFbo = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            int readFbo = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            int vao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
+            int vbo = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+            int activeTex = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            int[] texUnits = new int[5];
+            int[] samplers = new int[5];
+
+            for (int i = 0; i < 5; i++) {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + i);
+                texUnits[i] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+                try {
+                    samplers[i] = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+                } catch (Throwable ignored) {
+                }
+            }
+            GL13.glActiveTexture(activeTex);
+
+            boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+            boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
+            boolean depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+            boolean cullFace = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+
+            return new GlStateProbe(drawFbo, readFbo, program, vao, vbo, activeTex, texUnits, samplers, scissor, blend, depthTest, cullFace);
+        }
+
+        public GlStateProbe(int drawFbo, int readFbo, int program, int vao, int vbo, int activeTexture, int[] texUnits, int[] samplers, boolean scissor, boolean blend, boolean depthTest, boolean cullFace) {
+            this.drawFbo = drawFbo;
+            this.readFbo = readFbo;
+            this.program = program;
+            this.vao = vao;
+            this.vbo = vbo;
+            this.activeTexture = activeTexture;
+            System.arraycopy(texUnits, 0, this.textureBindings, 0, 5);
+            System.arraycopy(samplers, 0, this.samplerBindings, 0, 5);
+            this.scissor = scissor;
+            this.blend = blend;
+            this.depthTest = depthTest;
+            this.cullFace = cullFace;
+        }
+
+        public void compareAndLog(String passName, GlStateProbe after) {
+            if (after == null) return;
+            StringBuilder sb = new StringBuilder();
+            if (this.drawFbo != after.drawFbo) sb.append(String.format(" drawFBO: %d -> %d;", this.drawFbo, after.drawFbo));
+            if (this.readFbo != after.readFbo) sb.append(String.format(" readFBO: %d -> %d;", this.readFbo, after.readFbo));
+            if (this.program != after.program) sb.append(String.format(" program: %d -> %d;", this.program, after.program));
+            if (this.vao != after.vao) sb.append(String.format(" vao: %d -> %d;", this.vao, after.vao));
+            if (this.vbo != after.vbo) sb.append(String.format(" vbo: %d -> %d;", this.vbo, after.vbo));
+            if (this.activeTexture != after.activeTexture) sb.append(String.format(" activeTex: 0x%X -> 0x%X;", this.activeTexture, after.activeTexture));
+            for (int i = 0; i < 5; i++) {
+                if (this.textureBindings[i] != after.textureBindings[i]) {
+                    sb.append(String.format(" texUnit%d: %d -> %d;", i, this.textureBindings[i], after.textureBindings[i]));
+                }
+                if (this.samplerBindings[i] != after.samplerBindings[i]) {
+                    sb.append(String.format(" sampler%d: %d -> %d;", i, this.samplerBindings[i], after.samplerBindings[i]));
+                }
+            }
+            if (this.scissor != after.scissor) sb.append(String.format(" scissor: %b -> %b;", this.scissor, after.scissor));
+            if (this.blend != after.blend) sb.append(String.format(" blend: %b -> %b;", this.blend, after.blend));
+            if (this.depthTest != after.depthTest) sb.append(String.format(" depthTest: %b -> %b;", this.depthTest, after.depthTest));
+            if (this.cullFace != after.cullFace) sb.append(String.format(" cullFace: %b -> %b;", this.cullFace, after.cullFace));
+
+            if (sb.length() > 0) {
+                LOGGER.warn("[GL State Drift Probe] State mutation detected in {}:{}", passName, sb.toString());
+            }
+        }
     }
 }
 

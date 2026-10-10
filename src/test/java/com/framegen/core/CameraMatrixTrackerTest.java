@@ -25,6 +25,11 @@ class CameraMatrixTrackerTest {
     }
 
     @Test
+    void testInitialStateIsVelocityGated() {
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f)).isTrue();
+    }
+
+    @Test
     void testFirstFrameRegistration() {
         Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
         tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0);
@@ -186,4 +191,64 @@ class CameraMatrixTrackerTest {
         assertThat(vmReproj).isNotNull();
         assertThat(vmReproj.isFinite()).isTrue();
     }
+
+    @Test
+    void testMidpointReprojectionMatrices() {
+        // Contract: initial/reset state returns identity
+        assertThat(tracker.getMidToPrevMatrix()).isEqualTo(new Matrix4f().identity());
+        assertThat(tracker.getMidToCurrMatrix()).isEqualTo(new Matrix4f().identity());
+        assertThat(tracker.getMidToPrevSkyMatrix()).isEqualTo(new Matrix4f().identity());
+        assertThat(tracker.getMidToCurrSkyMatrix()).isEqualTo(new Matrix4f().identity());
+
+        // Register Frame 1: P_prev = (0, 0, 0), yaw = 0 deg
+        Matrix4f view1 = new Matrix4f().rotation(new org.joml.Quaternionf());
+        tracker.updateMatrices(view1, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+
+        // Still only 1 frame
+        assertThat(tracker.getMidToPrevMatrix()).isEqualTo(new Matrix4f().identity());
+
+        // Register Frame 2: P_curr = (2, 0, 0), yaw = 10 deg
+        org.joml.Quaternionf qCurr = new org.joml.Quaternionf().rotateY((float) Math.toRadians(10.0));
+        Matrix4f view2 = new Matrix4f().rotation(qCurr);
+        tracker.updateMatrices(view2, proj, 2.0, 0.0, 0.0, 1.0 / 60.0);
+
+        Matrix4f midToPrev = tracker.getMidToPrevMatrix();
+        Matrix4f midToCurr = tracker.getMidToCurrMatrix();
+        Matrix4f midToPrevSky = tracker.getMidToPrevSkyMatrix();
+        Matrix4f midToCurrSky = tracker.getMidToCurrSkyMatrix();
+
+        assertThat(midToPrev).isNotNull();
+        assertThat(midToCurr).isNotNull();
+        assertThat(midToPrevSky).isNotNull();
+        assertThat(midToCurrSky).isNotNull();
+
+        assertThat(midToPrev.isFinite()).isTrue();
+        assertThat(midToCurr.isFinite()).isTrue();
+        assertThat(midToPrevSky.isFinite()).isTrue();
+        assertThat(midToCurrSky.isFinite()).isTrue();
+
+        // End-to-end check on world point (0, 0, -10):
+        // Midpoint camera pose: (1, 0, 0), yaw = 5 deg. Camera-relative point is (-1, 0, -10).
+        org.joml.Quaternionf qMid = new org.joml.Quaternionf().slerp(qCurr, 0.5f, new org.joml.Quaternionf());
+        Matrix4f midRot = new Matrix4f().rotation(qMid);
+        Matrix4f midVP = new Matrix4f(proj).mul(midRot);
+
+        Vector4f midClip = new Vector4f();
+        midVP.transform(new Vector4f(-1.0f, 0.0f, -10.0f, 1.0f), midClip);
+        Vector4f midNDC = new Vector4f(midClip.x / midClip.w, midClip.y / midClip.w, midClip.z / midClip.w, 1.0f);
+
+        // Reproject to Frame 1 via tracker's MidToPrev
+        Vector4f reprojectedPrevClip = new Vector4f();
+        midToPrev.transform(midNDC, reprojectedPrevClip);
+        float reprojectedPrevX = reprojectedPrevClip.x / reprojectedPrevClip.w;
+
+        // In Frame 1 (camera at 0, 0, 0), world point (0, 0, -10) is center (x = 0)
+        assertThat(reprojectedPrevX).isCloseTo(0.0f, within(1e-3f));
+
+        // Reset check
+        tracker.reset();
+        assertThat(tracker.getMidToPrevMatrix()).isEqualTo(new Matrix4f().identity());
+        assertThat(tracker.getMidToCurrMatrix()).isEqualTo(new Matrix4f().identity());
+    }
 }
+

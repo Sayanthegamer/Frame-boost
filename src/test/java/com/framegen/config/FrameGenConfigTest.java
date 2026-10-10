@@ -23,6 +23,8 @@ class FrameGenConfigTest {
         assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(50.0f);
         assertThat(config.getMaxAbsoluteAngleThreshold()).isEqualTo(15.0f);
         assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(50.0f);
+        assertThat(config.isDebugLadderTintEnabled()).isFalse();
+        assertThat(config.isDebugLogGlDrift()).isFalse();
     }
 
     @Test

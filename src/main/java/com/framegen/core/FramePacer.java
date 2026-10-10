@@ -22,6 +22,10 @@ public class FramePacer {
     private double effectiveFps = 0.0;
     private double reprojectionTimeMs = 0.0;
     private boolean lastFrameGated = false;
+    private long renderStartNanoTime = 0;
+    private volatile double cpuWorkTimeMs = 0.0;
+
+    private volatile boolean intermediateSynthesisSuccess = false;
 
     public FramePacer() {
     }
@@ -31,6 +35,41 @@ public class FramePacer {
             INSTANCE = new FramePacer();
         }
         return INSTANCE;
+    }
+
+    public boolean isIntermediateSynthesisSuccess() {
+        return intermediateSynthesisSuccess;
+    }
+
+    public synchronized void recordRenderStart() {
+        this.renderStartNanoTime = System.nanoTime();
+    }
+
+    public synchronized void recordRenderEnd() {
+        if (this.renderStartNanoTime > 0) {
+            long duration = System.nanoTime() - this.renderStartNanoTime;
+            this.cpuWorkTimeMs = duration / 1_000_000.0;
+        }
+    }
+
+    public synchronized void recordCpuWorkTime(double cpuWorkTimeMs) {
+        this.cpuWorkTimeMs = cpuWorkTimeMs;
+    }
+
+    public double getCpuWorkTimeMs() {
+        return cpuWorkTimeMs;
+    }
+
+    public synchronized void reset() {
+        this.intermediateSynthesisSuccess = false;
+        this.lastFrameNanoTime = 0;
+        this.lastFrameDurationNanos = 0;
+        this.baseFps = 0.0;
+        this.effectiveFps = 0.0;
+        this.reprojectionTimeMs = 0.0;
+        this.lastFrameGated = false;
+        this.renderStartNanoTime = 0;
+        this.cpuWorkTimeMs = 0.0;
     }
 
     public synchronized void recordBaseFrame(long frameDurationNanos) {
@@ -56,6 +95,7 @@ public class FramePacer {
             CameraMatrixTracker matrixTracker,
             FrameCaptureManager captureManager
     ) {
+        this.intermediateSynthesisSuccess = false;
         long currentNanoTime = System.nanoTime();
         if (lastFrameNanoTime != 0) {
             recordBaseFrame(currentNanoTime - lastFrameNanoTime);
@@ -75,6 +115,11 @@ public class FramePacer {
         );
         this.lastFrameGated = isGated;
 
+        if (isGated) {
+            this.intermediateSynthesisSuccess = false;
+            return;
+        }
+
         long startReprojection = System.nanoTime();
 
         try {
@@ -84,21 +129,28 @@ public class FramePacer {
             TextureTarget entityMaskFBO = captureManager.getEntityMaskFBO();
 
             if (currentFBO != null && previousFBO != null && intermediateFBO != null) {
-                float effectiveBlend = isGated ? 0.0f : config.getInterpolationFactor();
-                shaderPass.render(
+                if (config.isDebugSkipRender()) {
+                    LOGGER.info("[DebugSkipRender] Skipping shaderPass.render to test if GL state pollution causes black screen.");
+                    return;
+                }
+                boolean success = shaderPass.render(
                         currentFBO.getColorTexture(),
                         previousFBO.getColorTexture(),
                         currentFBO.getDepthTexture(),
                         previousFBO.getDepthTexture(),
                         entityMaskFBO != null ? entityMaskFBO.getColorTexture() : null,
                         intermediateFBO.getColorTexture(),
-                        matrixTracker.getReprojectionMatrix(),
-                        matrixTracker.getViewmodelReprojectionMatrix(),
+                        matrixTracker.getMidToPrevMatrix(),
+                        matrixTracker.getMidToCurrMatrix(),
+                        matrixTracker.getMidToPrevSkyMatrix(),
+                        matrixTracker.getMidToCurrSkyMatrix(),
                         mainTarget.width,
                         mainTarget.height,
-                        effectiveBlend,
-                        config.getDepthDilationRadius()
+                        config.getInterpolationFactor(),
+                        config.getDepthDilationRadius(),
+                        config.isDebugLadderTintEnabled()
                 );
+                this.intermediateSynthesisSuccess = success;
             }
         } catch (Throwable t) {
             LOGGER.error("Error during FramePacer intermediate frame synthesis pass", t);
@@ -112,7 +164,7 @@ public class FramePacer {
         FrameGenConfig config = FrameGenConfig.getInstance();
         FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
 
-        if (!config.isEnabled() || !captureManager.hasPreviousFrame() || windowSurface == null || !windowSurface.isAcquired()) {
+        if (!config.isEnabled() || !captureManager.hasPreviousFrame() || !this.intermediateSynthesisSuccess || windowSurface == null || !windowSurface.isAcquired()) {
             return false;
         }
 
@@ -130,7 +182,7 @@ public class FramePacer {
             // Composite HUD onto intermediate frame to eliminate UI flickering
             if (hudFBO != null && mainTarget != null && currentFBO != null &&
                     mainTarget.getColorTexture() != null && currentFBO.getColorTexture() != null) {
-                shaderPass.compositeHud(
+                boolean hudOk = shaderPass.compositeHud(
                         intermediateFBO.getColorTexture(),
                         mainTarget.getColorTexture(),
                         currentFBO.getColorTexture(),
@@ -138,7 +190,9 @@ public class FramePacer {
                         mainTarget.width,
                         mainTarget.height
                 );
-                targetToPresent = hudFBO;
+                if (hudOk) {
+                    targetToPresent = hudFBO;
+                }
             }
 
             com.mojang.blaze3d.systems.CommandEncoder encoder = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder();
@@ -146,19 +200,6 @@ public class FramePacer {
             encoder.submit();
             windowSurface.present();
             windowSurface.acquireNextTexture();
-
-            // Precision frame pacing: pace half of the base frame interval to eliminate scanline tearing
-            long halfIntervalNanos = this.lastFrameDurationNanos / 2;
-            if (halfIntervalNanos > 1_000_000 && halfIntervalNanos < 40_000_000) {
-                long deadline = System.nanoTime() + halfIntervalNanos - 300_000;
-                long sleepNanos = deadline - System.nanoTime();
-                if (sleepNanos > 2_000_000) {
-                    java.util.concurrent.locks.LockSupport.parkNanos(sleepNanos - 1_000_000);
-                }
-                while (System.nanoTime() < deadline) {
-                    Thread.onSpinWait();
-                }
-            }
 
             return true;
         } catch (Throwable t) {
@@ -178,9 +219,10 @@ public class FramePacer {
         float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r FPS | 2x Target: §b%.0f§r FPS | Reproject: §e%s§r | Omega: §b%.0f°/s§r | Status: %s",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r / §b%.0f Hz§r (CPU work: §e%.1fms§r) | Reproject (CPU): §e%s§r | Swap: §b1 (FIFO)§r | Omega: §b%.0f°/s§r | Status: %s",
                 baseFps,
                 effectiveFps,
+                cpuWorkTimeMs,
                 timeStr,
                 angularVel,
                 statusStr

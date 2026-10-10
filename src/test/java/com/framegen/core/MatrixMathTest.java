@@ -116,4 +116,141 @@ class MatrixMathTest {
         assertThat(reprojectedNDC.x).isCloseTo(0.0f, within(1e-4f));
         assertThat(reprojectedNDC.y).isCloseTo(0.0f, within(1e-4f));
     }
+
+    @Test
+    void testMidpointPureRotationAngle() {
+        // Contract 1: 0.5 slerp on 10 degree yaw yields exactly 5 degrees
+        org.joml.Quaternionf qPrev = new org.joml.Quaternionf(); // 0 yaw
+        org.joml.Quaternionf qCurr = new org.joml.Quaternionf().rotateY((float) Math.toRadians(10.0));
+
+        org.joml.Quaternionf qMid = qPrev.slerp(qCurr, 0.5f, new org.joml.Quaternionf());
+        Matrix4f midView = new Matrix4f().rotation(qMid);
+
+        // Forward vector (0, 0, -1) transformed by midView
+        Vector4f forward = new Vector4f(0.0f, 0.0f, -1.0f, 0.0f);
+        Vector4f transformed = new Vector4f();
+        midView.transform(forward, transformed);
+
+        double angleDeg = Math.toDegrees(Math.atan2(-transformed.x, -transformed.z));
+        assertThat((float) angleDeg).isCloseTo(5.0f, within(1e-4f));
+    }
+
+    @Test
+    void testMidpointMatrixOrthonormality() {
+        // Contract 2: Midpoint view matrix is strictly orthonormal: M * M^T = I and det(M) = 1.0
+        org.joml.Quaternionf qPrev = new org.joml.Quaternionf();
+        org.joml.Quaternionf qCurr = new org.joml.Quaternionf().rotateXYZ(
+                (float) Math.toRadians(17.0),
+                (float) Math.toRadians(23.0),
+                (float) Math.toRadians(5.0)
+        );
+
+        org.joml.Quaternionf qMid = qPrev.slerp(qCurr, 0.5f, new org.joml.Quaternionf());
+        Matrix4f midView = new Matrix4f().rotation(qMid);
+
+        // Matrix transpose
+        Matrix4f transpose = new Matrix4f(midView).transpose();
+        Matrix4f identityCheck = new Matrix4f(midView).mul(transpose);
+
+        Matrix4f identity = new Matrix4f().identity();
+        for (int row = 0; row < 4; row++) {
+            for (int col = 0; col < 4; col++) {
+                assertThat(identityCheck.getRowColumn(row, col))
+                        .isCloseTo(identity.getRowColumn(row, col), within(1e-4f));
+            }
+        }
+
+        assertThat(midView.determinant()).isCloseTo(1.0f, within(1e-4f));
+    }
+
+    @Test
+    void testMidpointEndToEndWorldPoint() {
+        // Contract 3: Combined rotation + translation dual reprojection
+        // Camera moves from P_prev = (0, 0, 0) with yaw=0 to P_curr = (2, 0, 0) with yaw=10 deg
+        Matrix4f proj = new Matrix4f().perspective((float) Math.toRadians(70.0), 16.0f / 9.0f, 0.05f, 1000.0f);
+
+        org.joml.Quaternionf qPrev = new org.joml.Quaternionf();
+        Matrix4f prevRotView = new Matrix4f().rotation(qPrev);
+        Matrix4f prevVP = new Matrix4f(proj).mul(prevRotView);
+
+        org.joml.Quaternionf qCurr = new org.joml.Quaternionf().rotateY((float) Math.toRadians(10.0));
+        Matrix4f currRotView = new Matrix4f().rotation(qCurr);
+        Matrix4f currVP = new Matrix4f(proj).mul(currRotView);
+
+        // Delta = P_curr - P_prev = (2, 0, 0)
+        float deltaX = 2.0f;
+        float deltaY = 0.0f;
+        float deltaZ = 0.0f;
+
+        // Midpoint camera pose: P_mid = (1, 0, 0), yaw = 5 deg
+        org.joml.Quaternionf qMid = qPrev.slerp(qCurr, 0.5f, new org.joml.Quaternionf());
+        Matrix4f midRotView = new Matrix4f().rotation(qMid);
+        Matrix4f midVP = new Matrix4f(proj).mul(midRotView);
+        Matrix4f invMidVP = new Matrix4f(midVP).invert();
+
+        // Dual reprojection matrices:
+        // MidToPrev = PrevVP * Translation(+0.5 * delta) * InvMidVP
+        Matrix4f transToPrev = new Matrix4f().translation(0.5f * deltaX, 0.5f * deltaY, 0.5f * deltaZ);
+        Matrix4f midToPrev = new Matrix4f(prevVP).mul(transToPrev).mul(invMidVP);
+
+        // MidToCurr = CurrVP * Translation(-0.5 * delta) * InvMidVP
+        Matrix4f transToCurr = new Matrix4f().translation(-0.5f * deltaX, -0.5f * deltaY, -0.5f * deltaZ);
+        Matrix4f midToCurr = new Matrix4f(currVP).mul(transToCurr).mul(invMidVP);
+
+        // World target at (0, 0, -10)
+        // Midpoint camera at (1, 0, 0) sees point at camera-relative (-1, 0, -10)
+        Vector4f midRelPoint = new Vector4f(-1.0f, 0.0f, -10.0f, 1.0f);
+        Vector4f midClip = new Vector4f();
+        midVP.transform(midRelPoint, midClip);
+        Vector4f midNDC = new Vector4f(midClip.x / midClip.w, midClip.y / midClip.w, midClip.z / midClip.w, 1.0f);
+
+        // Reproject midNDC to previous frame
+        Vector4f reprojectedPrevClip = new Vector4f();
+        midToPrev.transform(midNDC, reprojectedPrevClip);
+        Vector4f reprojectedPrevNDC = new Vector4f(
+                reprojectedPrevClip.x / reprojectedPrevClip.w,
+                reprojectedPrevClip.y / reprojectedPrevClip.w,
+                reprojectedPrevClip.z / reprojectedPrevClip.w,
+                1.0f
+        );
+
+        // Direct previous frame projection of world point (0, 0, -10) relative to P_prev (0, 0, 0) -> (0, 0, -10)
+        Vector4f prevDirectClip = new Vector4f();
+        prevVP.transform(new Vector4f(0.0f, 0.0f, -10.0f, 1.0f), prevDirectClip);
+        Vector4f prevDirectNDC = new Vector4f(
+                prevDirectClip.x / prevDirectClip.w,
+                prevDirectClip.y / prevDirectClip.w,
+                prevDirectClip.z / prevDirectClip.w,
+                1.0f
+        );
+
+        assertThat(reprojectedPrevNDC.x).isCloseTo(prevDirectNDC.x, within(1e-4f));
+        assertThat(reprojectedPrevNDC.y).isCloseTo(prevDirectNDC.y, within(1e-4f));
+        assertThat(reprojectedPrevNDC.z).isCloseTo(prevDirectNDC.z, within(1e-4f));
+
+        // Reproject midNDC to current frame
+        Vector4f reprojectedCurrClip = new Vector4f();
+        midToCurr.transform(midNDC, reprojectedCurrClip);
+        Vector4f reprojectedCurrNDC = new Vector4f(
+                reprojectedCurrClip.x / reprojectedCurrClip.w,
+                reprojectedCurrClip.y / reprojectedCurrClip.w,
+                reprojectedCurrClip.z / reprojectedCurrClip.w,
+                1.0f
+        );
+
+        // Direct current frame projection of world point (0, 0, -10) relative to P_curr (2, 0, 0) -> (-2, 0, -10)
+        Vector4f currDirectClip = new Vector4f();
+        currVP.transform(new Vector4f(-2.0f, 0.0f, -10.0f, 1.0f), currDirectClip);
+        Vector4f currDirectNDC = new Vector4f(
+                currDirectClip.x / currDirectClip.w,
+                currDirectClip.y / currDirectClip.w,
+                currDirectClip.z / currDirectClip.w,
+                1.0f
+        );
+
+        assertThat(reprojectedCurrNDC.x).isCloseTo(currDirectNDC.x, within(1e-4f));
+        assertThat(reprojectedCurrNDC.y).isCloseTo(currDirectNDC.y, within(1e-4f));
+        assertThat(reprojectedCurrNDC.z).isCloseTo(currDirectNDC.z, within(1e-4f));
+    }
 }
+

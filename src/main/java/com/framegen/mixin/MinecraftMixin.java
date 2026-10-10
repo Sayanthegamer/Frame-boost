@@ -21,15 +21,34 @@ public abstract class MinecraftMixin {
             method = "renderFrame",
             at = @At(
                     value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V"
+            )
+    )
+    private void framegen$onBeforeGameRendererRender(boolean renderLevel, CallbackInfo ci) {
+        FramePacer.getInstance().recordRenderStart();
+    }
+
+    @Inject(
+            method = "renderFrame",
+            at = @At(
+                    value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V",
                     shift = At.Shift.AFTER
             )
     )
     private void framegen$onAfterGameRendererRender(boolean renderLevel, CallbackInfo ci) {
-        com.mojang.blaze3d.pipeline.RenderTarget mainTarget = this.gameRenderer != null ? this.gameRenderer.mainRenderTarget() : null;
-        if (FramePacer.getInstance().presentIntermediateFrame(this.windowSurface, mainTarget)) {
-            this.frames++;
+        FramePacer.getInstance().recordRenderEnd();
+        com.framegen.capture.FrameCaptureManager captureManager = com.framegen.capture.FrameCaptureManager.getInstance();
+        try {
+            if (captureManager.isCapturedThisFrame()) {
+                com.mojang.blaze3d.pipeline.RenderTarget mainTarget = this.gameRenderer != null ? this.gameRenderer.mainRenderTarget() : null;
+                if (FramePacer.getInstance().presentIntermediateFrame(this.windowSurface, mainTarget)) {
+                    this.frames++;
+                }
+                captureManager.advanceFrame();
+            }
+        } finally {
+            captureManager.setCapturedThisFrame(false);
         }
-        com.framegen.capture.FrameCaptureManager.getInstance().advanceFrame();
     }
 }

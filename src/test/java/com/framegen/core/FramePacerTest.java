@@ -60,4 +60,17 @@ class FramePacerTest {
         assertThat(telemetry).contains("GATED (SNAP)");
         assertThat(framePacer.isLastFrameGated()).isTrue();
     }
+
+    @Test
+    void testCpuWorkTimeRecording() {
+        framePacer.recordBaseFrame(16_666_666L);
+        framePacer.recordCpuWorkTime(11.4);
+        assertThat(framePacer.getCpuWorkTimeMs()).isEqualTo(11.4);
+
+        String telemetry = framePacer.getTelemetryString(true);
+        assertThat(telemetry).contains("CPU work:");
+        assertThat(telemetry).contains("11.4ms");
+        assertThat(telemetry).contains("Reproject (CPU):");
+        assertThat(telemetry).contains("1 (FIFO)");
+    }
 }

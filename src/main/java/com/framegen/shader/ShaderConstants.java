@@ -11,6 +11,11 @@ public final class ShaderConstants {
     public static final String UNIFORM_BLEND_FACTOR = "BlendFactor";
     public static final String UNIFORM_DEPTH_DILATION = "DepthDilationRadius";
     public static final String UNIFORM_ENTITY_MASK = "EntityMaskSampler";
+    public static final String UNIFORM_MID_TO_PREV_MATRIX = "MidToPrevMatrix";
+    public static final String UNIFORM_MID_TO_CURR_MATRIX = "MidToCurrMatrix";
+    public static final String UNIFORM_MID_TO_PREV_SKY_MATRIX = "MidToPrevSkyMatrix";
+    public static final String UNIFORM_MID_TO_CURR_SKY_MATRIX = "MidToCurrSkyMatrix";
+    public static final String UNIFORM_DEBUG_LADDER_MODE = "uDebugLadderMode";
 
     public static final int TEXTURE_UNIT_CURRENT_COLOR = 0;
     public static final int TEXTURE_UNIT_PREVIOUS_COLOR = 1;

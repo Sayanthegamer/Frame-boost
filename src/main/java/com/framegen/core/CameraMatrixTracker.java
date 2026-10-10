@@ -17,6 +17,10 @@ public class CameraMatrixTracker {
 
     private final Matrix4f reprojectionMatrix = new Matrix4f();
     private final Matrix4f viewmodelReprojectionMatrix = new Matrix4f();
+    private final Matrix4f midToPrevMatrix = new Matrix4f();
+    private final Matrix4f midToCurrMatrix = new Matrix4f();
+    private final Matrix4f midToPrevSkyMatrix = new Matrix4f();
+    private final Matrix4f midToCurrSkyMatrix = new Matrix4f();
     private final Matrix4f currentViewmodelMatrix = new Matrix4f();
     private final Matrix4f previousViewmodelMatrix = new Matrix4f();
 
@@ -113,11 +117,18 @@ public class CameraMatrixTracker {
             if (!viewmodelReprojectionMatrix.isFinite()) {
                 viewmodelReprojectionMatrix.identity();
             }
+
+            // Midpoint pose synthesis & dual reprojection matrices
+            computeMidpointMatrices(deltaX, deltaY, deltaZ);
         } else {
             this.angularDeltaDegrees = 0.0f;
             this.translationDelta = 0.0f;
             this.angularVelocityDegPerSec = 0.0f;
             this.translationVelocityBlocksPerSec = 0.0f;
+            this.midToPrevMatrix.identity();
+            this.midToCurrMatrix.identity();
+            this.midToPrevSkyMatrix.identity();
+            this.midToCurrSkyMatrix.identity();
         }
     }
 
@@ -168,9 +179,13 @@ public class CameraMatrixTracker {
         previousViewProjectionMatrix.identity();
         reprojectionMatrix.identity();
         viewmodelReprojectionMatrix.identity();
+        midToPrevMatrix.identity();
+        midToCurrMatrix.identity();
+        midToPrevSkyMatrix.identity();
+        midToCurrSkyMatrix.identity();
     }
 
-    public boolean hasPreviousFrame() {
+    public synchronized boolean hasPreviousFrame() {
         return hasPreviousFrame;
     }
 
@@ -205,7 +220,7 @@ public class CameraMatrixTracker {
             float maxFrameDurationThresholdMs
     ) {
         if (!hasPreviousFrame) {
-            return false;
+            return true;
         }
         boolean rateGated = angularVelocityDegPerSec > maxAngularVelocityDegPerSec
                 || translationVelocityBlocksPerSec > maxTranslationVelocityBlocksPerSec;
@@ -272,5 +287,62 @@ public class CameraMatrixTracker {
 
     public double getPreviousCamZ() {
         return previousCamZ;
+    }
+
+    private void computeMidpointMatrices(float deltaX, float deltaY, float deltaZ) {
+        Quaternionf qPrev = new Quaternionf().setFromNormalized(previousViewMatrix);
+        Quaternionf qCurr = new Quaternionf().setFromNormalized(currentViewMatrix);
+        Quaternionf qMid = qPrev.slerp(qCurr, 0.5f, new Quaternionf());
+        Matrix4f midViewMatrix = new Matrix4f().rotation(qMid);
+
+        Matrix4f midProjMatrix = new Matrix4f(currentProjectionMatrix);
+        float m00 = previousProjectionMatrix.m00() + (currentProjectionMatrix.m00() - previousProjectionMatrix.m00()) * 0.5f;
+        float m11 = previousProjectionMatrix.m11() + (currentProjectionMatrix.m11() - previousProjectionMatrix.m11()) * 0.5f;
+        midProjMatrix.m00(m00);
+        midProjMatrix.m11(m11);
+
+        Matrix4f midVP = new Matrix4f(midProjMatrix).mul(midViewMatrix);
+        Matrix4f invMidVP = new Matrix4f(midVP).invert();
+        if (!invMidVP.isFinite()) {
+            invMidVP.identity();
+        }
+
+        Matrix4f transToPrev = new Matrix4f().translation(0.5f * deltaX, 0.5f * deltaY, 0.5f * deltaZ);
+        midToPrevMatrix.set(previousViewProjectionMatrix).mul(transToPrev).mul(invMidVP);
+        if (!midToPrevMatrix.isFinite()) {
+            midToPrevMatrix.identity();
+        }
+
+        Matrix4f transToCurr = new Matrix4f().translation(-0.5f * deltaX, -0.5f * deltaY, -0.5f * deltaZ);
+        midToCurrMatrix.set(currentViewProjectionMatrix).mul(transToCurr).mul(invMidVP);
+        if (!midToCurrMatrix.isFinite()) {
+            midToCurrMatrix.identity();
+        }
+
+        midToPrevSkyMatrix.set(previousViewProjectionMatrix).mul(invMidVP);
+        if (!midToPrevSkyMatrix.isFinite()) {
+            midToPrevSkyMatrix.identity();
+        }
+
+        midToCurrSkyMatrix.set(currentViewProjectionMatrix).mul(invMidVP);
+        if (!midToCurrSkyMatrix.isFinite()) {
+            midToCurrSkyMatrix.identity();
+        }
+    }
+
+    public synchronized Matrix4f getMidToPrevMatrix() {
+        return new Matrix4f(midToPrevMatrix);
+    }
+
+    public synchronized Matrix4f getMidToCurrMatrix() {
+        return new Matrix4f(midToCurrMatrix);
+    }
+
+    public synchronized Matrix4f getMidToPrevSkyMatrix() {
+        return new Matrix4f(midToPrevSkyMatrix);
+    }
+
+    public synchronized Matrix4f getMidToCurrSkyMatrix() {
+        return new Matrix4f(midToCurrSkyMatrix);
     }
 }

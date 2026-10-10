@@ -28,6 +28,10 @@ public class FrameGenConfig {
     private float maxTranslationVelocityThreshold = 50.0f; // blocks / second
     private float maxAbsoluteAngleThreshold = 15.0f; // degrees hard snap ceiling
     private float maxFrameDurationThresholdMs = 50.0f; // ms hard lag spike ceiling (20 FPS)
+    private boolean debugSkipRender = false;
+    private boolean debugLogGlDrift = false;
+    private boolean debugLadderTintEnabled = false;
+    private boolean debugCalibrationLog = false;
 
     public FrameGenConfig() {
     }
@@ -194,5 +198,37 @@ public class FrameGenConfig {
     public void setMaxFrameDurationThresholdMs(float maxFrameDurationThresholdMs) {
         this.maxFrameDurationThresholdMs = maxFrameDurationThresholdMs;
         validate();
+    }
+
+    public boolean isDebugSkipRender() {
+        return debugSkipRender;
+    }
+
+    public void setDebugSkipRender(boolean debugSkipRender) {
+        this.debugSkipRender = debugSkipRender;
+    }
+
+    public boolean isDebugLogGlDrift() {
+        return debugLogGlDrift;
+    }
+
+    public void setDebugLogGlDrift(boolean debugLogGlDrift) {
+        this.debugLogGlDrift = debugLogGlDrift;
+    }
+
+    public boolean isDebugLadderTintEnabled() {
+        return debugLadderTintEnabled;
+    }
+
+    public void setDebugLadderTintEnabled(boolean debugLadderTintEnabled) {
+        this.debugLadderTintEnabled = debugLadderTintEnabled;
+    }
+
+    public boolean isDebugCalibrationLog() {
+        return debugCalibrationLog;
+    }
+
+    public void setDebugCalibrationLog(boolean debugCalibrationLog) {
+        this.debugCalibrationLog = debugCalibrationLog;
     }
 }

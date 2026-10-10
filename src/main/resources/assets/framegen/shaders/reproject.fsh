@@ -9,144 +9,167 @@ uniform sampler2D CurrentDepthSampler;
 uniform sampler2D PreviousDepthSampler;
 uniform sampler2D EntityMaskSampler;
 
-uniform mat4 ReprojectionMatrix;
-uniform mat4 ViewModelReprojectionMatrix;
+uniform mat4 MidToPrevMatrix;
+uniform mat4 MidToCurrMatrix;
+uniform mat4 MidToPrevSkyMatrix;
+uniform mat4 MidToCurrSkyMatrix;
 uniform vec2 ScreenSize;
 uniform float BlendFactor;
 uniform float DepthDilationRadius;
+uniform int uDebugLadderMode;
 
 void main() {
-    vec2 texelSize = 1.0 / ScreenSize;
-    float closestDepth = texture(CurrentDepthSampler, texCoord).r;
+    // 1. Initial depth seeds from both frames at current midpoint screen coordinate
+    float dN = texture(CurrentDepthSampler, texCoord).r;
+    float dP = texture(PreviousDepthSampler, texCoord).r;
 
-    // Fast-path: Sky / infinite background in Reverse-Z is depth 0.0 (requires no reprojection)
-    if (closestDepth <= 0.0001) {
-        fragColor = texture(CurrentColorSampler, texCoord);
-        return;
-    }
-
-    vec4 maskSample = texture(EntityMaskSampler, texCoord);
-    // In Minecraft Reverse-Z, viewmodel hand is in the extreme foreground (depth > 0.95 or mask.g > 0.5)
-    bool isViewmodel = (maskSample.g > 0.5) || (maskSample.r > 0.5 && closestDepth > 0.95);
-    bool isDynamicMob = (maskSample.r > 0.5 && !isViewmodel);
-
-    if (!isViewmodel && DepthDilationRadius > 0.0) {
-        for (int y = -1; y <= 1; ++y) {
-            for (int x = -1; x <= 1; ++x) {
-                vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
-                float d = texture(CurrentDepthSampler, texCoord + offset).r;
-                closestDepth = max(closestDepth, d);
+    // Iterative refinement pass 1 & 2 for Frame N candidate
+    for (int i = 0; i < 2; ++i) {
+        float zN = 1.0 - dN * 2.0;
+        vec4 pN = vec4(texCoord * 2.0 - 1.0, zN, 1.0);
+        vec4 cN = MidToCurrMatrix * pN;
+        if (cN.w > 0.0) {
+            vec2 uvN = (cN.xy / max(cN.w, 0.00001)) * 0.5 + 0.5;
+            if (uvN.x >= 0.0 && uvN.x <= 1.0 && uvN.y >= 0.0 && uvN.y <= 1.0) {
+                dN = texture(CurrentDepthSampler, uvN).r;
             }
         }
     }
 
-    // 1. Unproject from NDC
-    // Reverse-Z: depth 1.0 (near) -> zNDC -1.0, depth 0.0 (far) -> zNDC +1.0
-    float zNDC = 1.0 - closestDepth * 2.0;
-    vec4 currClip = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
-
-    // Select dedicated viewmodel rotation matrix vs world matrix
-    mat4 activeReproj = isViewmodel ? ViewModelReprojectionMatrix : ReprojectionMatrix;
-    vec4 prevClip = activeReproj * currClip;
-    vec3 prevNDC = prevClip.xyz / max(prevClip.w, 0.00001);
-    vec2 prevUV = prevNDC.xy * 0.5 + 0.5;
-
-    // Depth-Coherent Stencil Composition (Eliminating Dynamic Entity Bifurcation)
-    // If the dynamic mob is in front of the reprojected intermediate world, pass through;
-    // if it is occluded behind a t=0.5 foreground obstacle, cull and fall through to background!
-    if (isDynamicMob) {
-        float rawEntityDepth = texture(CurrentDepthSampler, texCoord).r;
-        float reprojectedOccluderDepth = (1.0 - prevNDC.z) * 0.5;
-        if (rawEntityDepth >= reprojectedOccluderDepth - 0.005) {
-            fragColor = texture(CurrentColorSampler, texCoord);
-            return;
+    // Iterative refinement pass 1 & 2 for Frame N-1 candidate
+    for (int i = 0; i < 2; ++i) {
+        float zP = 1.0 - dP * 2.0;
+        vec4 pP = vec4(texCoord * 2.0 - 1.0, zP, 1.0);
+        vec4 cP = MidToPrevMatrix * pP;
+        if (cP.w > 0.0) {
+            vec2 uvP = (cP.xy / max(cP.w, 0.00001)) * 0.5 + 0.5;
+            if (uvP.x >= 0.0 && uvP.x <= 1.0 && uvP.y >= 0.0 && uvP.y <= 1.0) {
+                dP = texture(PreviousDepthSampler, uvP).r;
+            }
         }
     }
 
-    // 2. Current center color & 3x3 color neighborhood AABB clamping
-    vec4 currColor = texture(CurrentColorSampler, texCoord);
-    vec4 minColor = currColor;
-    vec4 maxColor = currColor;
+    // Arbitrate Single Midpoint Surface:
+    // In Reverse-Z, larger depth is nearer surface: dMid = max(dN, dP)
+    float dMid = max(dN, dP);
 
-    for (int y = -1; y <= 1; ++y) {
-        for (int x = -1; x <= 1; ++x) {
-            vec2 offset = vec2(float(x), float(y)) * texelSize;
-            vec4 neighbor = texture(CurrentColorSampler, texCoord + offset);
-            minColor = min(minColor, neighbor);
-            maxColor = max(maxColor, neighbor);
+    // Depth dilation around foreground silhouettes if configured
+    if (DepthDilationRadius > 0.0 && dMid > 0.0001) {
+        vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
+        for (int y = -1; y <= 1; ++y) {
+            for (int x = -1; x <= 1; ++x) {
+                if (x == 0 && y == 0) continue;
+                vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
+                float dSampleN = texture(CurrentDepthSampler, texCoord + offset).r;
+                float dSampleP = texture(PreviousDepthSampler, texCoord + offset).r;
+                dMid = max(dMid, max(dSampleN, dSampleP));
+            }
         }
     }
 
-    // 3. Sample previous frame with strict sub-pixel border rejection & depth disocclusion validation
-    bool validUV = (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0 && prevClip.w > 0.0);
-    vec4 prevColor = currColor;
+    // Sky Decision: Sky (dMid <= 0.0001) is evaluated strictly after refinement
+    if (dMid <= 0.0001) {
+        // Pure rotation sky warping
+        vec4 skyPoint = vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+        vec4 cSkyCurr = MidToCurrSkyMatrix * skyPoint;
+        vec4 cSkyPrev = MidToPrevSkyMatrix * skyPoint;
 
-    if (validUV) {
-        float actualPrevDepth = texture(PreviousDepthSampler, prevUV).r;
-        float expectedPrevDepth = (1.0 - prevNDC.z) * 0.5;
+        vec2 uvSkyCurr = (cSkyCurr.xy / max(cSkyCurr.w, 0.00001)) * 0.5 + 0.5;
+        vec2 uvSkyPrev = (cSkyPrev.xy / max(cSkyPrev.w, 0.00001)) * 0.5 + 0.5;
 
-        // Depth discrepancy test in Reverse-Z space
-        float depthDiff = abs(actualPrevDepth - expectedPrevDepth);
-        float depthThreshold = isViewmodel ? 0.08 : max(0.02 * max(expectedPrevDepth, 0.001), 0.005);
+        bool skyCurrValid = (uvSkyCurr.x >= 0.0 && uvSkyCurr.x <= 1.0 && uvSkyCurr.y >= 0.0 && uvSkyCurr.y <= 1.0 && cSkyCurr.w > 0.0);
+        bool skyPrevValid = (uvSkyPrev.x >= 0.0 && uvSkyPrev.x <= 1.0 && uvSkyPrev.y >= 0.0 && uvSkyPrev.y <= 1.0 && cSkyPrev.w > 0.0);
 
-        if (depthDiff <= depthThreshold) {
-            vec4 rawPrev = texture(PreviousColorSampler, prevUV);
-            prevColor = clamp(rawPrev, minColor, maxColor);
+        if (skyCurrValid && skyPrevValid) {
+            vec4 colCurr = texture(CurrentColorSampler, uvSkyCurr);
+            vec4 colPrev = texture(PreviousColorSampler, uvSkyPrev);
+            fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, BlendFactor), 1.0);
+        } else if (skyCurrValid) {
+            fragColor = vec4(texture(CurrentColorSampler, uvSkyCurr).rgb, 1.0);
+            if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 1.0, 0.0, 1.0), 0.7);
+        } else if (skyPrevValid) {
+            fragColor = vec4(texture(PreviousColorSampler, uvSkyPrev).rgb, 1.0);
+            if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 0.0, 1.0, 1.0), 0.7);
         } else {
-            // Parallax Disocclusion: True Background Epipolar Line Projection
-            // Compute motion vector at background depth (actualPrevDepth) to align search on true background trajectory
-            float zNDC_bg = 1.0 - actualPrevDepth * 2.0;
-            vec4 bgClip = vec4(texCoord * 2.0 - 1.0, zNDC_bg, 1.0);
-            vec4 prevBgClip = ReprojectionMatrix * bgClip;
-            vec2 prevBgUV = (prevBgClip.xy / max(prevBgClip.w, 0.00001)) * 0.5 + 0.5;
+            fragColor = vec4(texture(CurrentColorSampler, texCoord).rgb, 1.0);
+            if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(1.0, 0.0, 0.0, 1.0), 0.7);
+        }
+        return;
+    }
 
-            vec2 bgMotionVec = prevBgUV - texCoord;
-            float bgMotionLen = length(bgMotionVec);
-            vec2 bgMotionDir = bgMotionLen > 0.0001 ? bgMotionVec / bgMotionLen : vec2(1.0, 0.0);
+    // 2. Validate BOTH Sources against single mid-surface point P_mid
+    float zNDC = 1.0 - dMid * 2.0;
+    vec4 pMid = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
 
-            // Scale search along background epipolar trajectory
-            float parallaxScale = max(bgMotionLen * 1.5, length(texelSize) * 2.0) * max(DepthDilationRadius, 1.0);
+    // Reproject P_mid into Frame N (Current)
+    vec4 clipN = MidToCurrMatrix * pMid;
+    vec3 ndcN = clipN.xyz / max(clipN.w, 0.00001);
+    vec2 uvN = ndcN.xy * 0.5 + 0.5;
+    float expectedDepthN = (1.0 - ndcN.z) * 0.5;
 
-            vec2 uv0 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
-            vec2 uv1 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 1.0), 0.0, 1.0);
-            vec2 uv2 = clamp(prevBgUV + bgMotionDir * (parallaxScale * 2.0), 0.0, 1.0);
-            vec2 uv3 = clamp(prevBgUV - bgMotionDir * (parallaxScale * 0.5), 0.0, 1.0);
+    // Reproject P_mid into Frame N-1 (Previous)
+    vec4 clipP = MidToPrevMatrix * pMid;
+    vec3 ndcP = clipP.xyz / max(clipP.w, 0.00001);
+    vec2 uvP = ndcP.xy * 0.5 + 0.5;
+    float expectedDepthP = (1.0 - ndcP.z) * 0.5;
 
-            float d0 = texture(PreviousDepthSampler, uv0).r;
-            float d1 = texture(PreviousDepthSampler, uv1).r;
-            float d2 = texture(PreviousDepthSampler, uv2).r;
-            float d3 = texture(PreviousDepthSampler, uv3).r;
+    bool uvInBoundsN = (uvN.x >= 0.0 && uvN.x <= 1.0 && uvN.y >= 0.0 && uvN.y <= 1.0 && clipN.w > 0.0);
+    bool uvInBoundsP = (uvP.x >= 0.0 && uvP.x <= 1.0 && uvP.y >= 0.0 && uvP.y <= 1.0 && clipP.w > 0.0);
 
-            float invTwoSigmaSq = 1.0 / (2.0 * max(depthThreshold * depthThreshold * 2.25, 0.0001));
-            float diff0 = d0 - actualPrevDepth;
-            float diff1 = d1 - actualPrevDepth;
-            float diff2 = d2 - actualPrevDepth;
-            float diff3 = d3 - actualPrevDepth;
+    float tauN = max(0.02 * max(expectedDepthN, 0.001), 0.005);
+    float tauP = max(0.02 * max(expectedDepthP, 0.001), 0.005);
 
-            float w0 = exp(-(diff0 * diff0) * invTwoSigmaSq);
-            float w1 = exp(-(diff1 * diff1) * invTwoSigmaSq);
-            float w2 = exp(-(diff2 * diff2) * invTwoSigmaSq);
-            float w3 = exp(-(diff3 * diff3) * invTwoSigmaSq);
+    bool validN = false;
+    if (uvInBoundsN) {
+        float actualDepthN = texture(CurrentDepthSampler, uvN).r;
+        validN = abs(actualDepthN - expectedDepthN) <= tauN;
+    }
 
-            vec4 c0 = texture(PreviousColorSampler, uv0);
-            vec4 c1 = texture(PreviousColorSampler, uv1);
-            vec4 c2 = texture(PreviousColorSampler, uv2);
-            vec4 c3 = texture(PreviousColorSampler, uv3);
+    bool validP = false;
+    if (uvInBoundsP) {
+        float actualDepthP = texture(PreviousDepthSampler, uvP).r;
+        validP = abs(actualDepthP - expectedDepthP) <= tauP;
+    }
 
-            float sumWeights = w0 + w1 + w2 + w3;
-            vec4 infilledColor = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / max(sumWeights, 0.0001);
+    // 3. Synthesis Ladder
+    if (validN && validP) {
+        // Case A (Both Valid): Untinted, smooth divergence ramp
+        vec4 currColor = texture(CurrentColorSampler, uvN);
+        vec4 prevColor = texture(PreviousColorSampler, uvP);
 
-            // Continuous Parallax Cosine Phase Damping: Smoothly blend confidence without box-blur smudging
-            float confidence = clamp(sumWeights * 0.5, 0.0, 1.0);
-            float cosineWeight = 0.5 - 0.5 * cos(3.14159265 * confidence);
-            vec4 blendedPrev = mix(currColor, infilledColor, cosineWeight);
-            prevColor = clamp(blendedPrev, minColor, maxColor);
+        vec3 diff = abs(currColor.rgb - prevColor.rgb);
+        float deltaC = max(diff.r, max(diff.g, diff.b));
+        float ramp = smoothstep(0.05, 0.25, deltaC);
+
+        float wBase = BlendFactor;
+        float wPrev = wBase * (1.0 - ramp);
+        float wCurr = 1.0 - wPrev;
+
+        vec3 synth = wCurr * currColor.rgb + wPrev * prevColor.rgb;
+        fragColor = vec4(synth, 1.0);
+    } else if (validN) {
+        // Case B (Only N Valid): Newly appearing terrain
+        vec4 currColor = texture(CurrentColorSampler, uvN);
+        if (uDebugLadderMode == 1) {
+            fragColor = vec4(mix(currColor.rgb, vec3(0.0, 1.0, 0.0), 0.7), 1.0); // Tint Green
+        } else {
+            fragColor = vec4(currColor.rgb, 1.0);
+        }
+    } else if (validP) {
+        // Case C (Only N-1 Valid): Terrain rotating out
+        vec4 prevColor = texture(PreviousColorSampler, uvP);
+        if (uDebugLadderMode == 1) {
+            fragColor = vec4(mix(prevColor.rgb, vec3(0.0, 0.0, 1.0), 0.7), 1.0); // Tint Blue
+        } else {
+            fragColor = vec4(prevColor.rgb, 1.0);
         }
     } else {
-        // Out of viewport bounds: Strict sub-pixel rejection (no streak dragging or barcode stretching)
-        prevColor = currColor;
+        // Case D (Neither Valid): Fallback to current frame center
+        vec4 fallbackColor = texture(CurrentColorSampler, texCoord);
+        if (uDebugLadderMode == 1) {
+            fragColor = vec4(mix(fallbackColor.rgb, vec3(1.0, 0.0, 0.0), 0.7), 1.0); // Tint Red
+        } else {
+            fragColor = vec4(fallbackColor.rgb, 1.0);
+        }
     }
-
-    // 4. Synthesize intermediate frame (t = BlendFactor)
-    fragColor = mix(currColor, prevColor, BlendFactor);
 }

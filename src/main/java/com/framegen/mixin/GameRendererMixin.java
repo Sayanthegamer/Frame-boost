@@ -1,6 +1,7 @@
 package com.framegen.mixin;
 
 import com.framegen.capture.FrameCaptureManager;
+import com.framegen.config.FrameGenConfig;
 import com.framegen.core.CameraMatrixTracker;
 import com.framegen.core.FramePacer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -10,6 +11,8 @@ import net.minecraft.client.renderer.state.GameRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -19,6 +22,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
+    private static final Logger LOGGER = LoggerFactory.getLogger("FrameGenCalibration");
+    private static long framegen$calibrationCounter = 0;
 
     @Shadow @Final private GameRenderState gameRenderState;
     @Shadow private RenderTarget mainRenderTarget;
@@ -38,12 +43,27 @@ public abstract class GameRendererMixin {
                 Matrix4f viewMatrix = new Matrix4f(cameraState.viewRotationMatrix);
                 Matrix4f projMatrix = new Matrix4f(cameraState.projectionMatrix);
 
-                CameraMatrixTracker.getInstance().updateMatrices(viewMatrix, projMatrix, pos.x, pos.y, pos.z);
+                float deltaSeconds = deltaTracker != null ? Math.max(0.0001f, deltaTracker.getRealtimeDeltaTicks() / 20.0f) : (1.0f / 60.0f);
+                CameraMatrixTracker.getInstance().updateMatrices(viewMatrix, projMatrix, pos.x, pos.y, pos.z, deltaSeconds);
+
+                if (FrameGenConfig.getInstance().isDebugCalibrationLog() && (framegen$calibrationCounter++ % 120 == 0)) {
+                    float m22 = projMatrix.m22();
+                    float m32 = projMatrix.m32();
+                    float distNearStd = m32 / (1.0f + m22);
+                    float distNearRev = m32 / ((1.0f - 2.0f * 1.0f) + m22);
+                    float distMidStd = m32 / (0.5f + m22);
+                    float distMidRev = m32 / ((1.0f - 2.0f * 0.5f) + m22);
+                    LOGGER.info("[Reverse-Z Calibration] Proj m22={}, m32={}. [z=d]: d=1.0->{}, d=0.5->{} | [z=1-2d]: d=1.0->{}, d=0.5->{}",
+                            m22, m32, distNearStd, distMidStd, distNearRev, distMidRev);
+                }
 
                 FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
-                captureManager.captureCurrentFrame(this.mainRenderTarget);
+                boolean captured = captureManager.captureCurrentFrame(this.mainRenderTarget);
+                captureManager.setCapturedThisFrame(captured);
 
-                FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
+                if (captured) {
+                    FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
+                }
             }
         }
     }

@@ -18,6 +18,11 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_BLEND_FACTOR).isEqualTo("BlendFactor");
         assertThat(ShaderConstants.UNIFORM_DEPTH_DILATION).isEqualTo("DepthDilationRadius");
         assertThat(ShaderConstants.UNIFORM_ENTITY_MASK).isEqualTo("EntityMaskSampler");
+        assertThat(ShaderConstants.UNIFORM_MID_TO_PREV_MATRIX).isEqualTo("MidToPrevMatrix");
+        assertThat(ShaderConstants.UNIFORM_MID_TO_CURR_MATRIX).isEqualTo("MidToCurrMatrix");
+        assertThat(ShaderConstants.UNIFORM_MID_TO_PREV_SKY_MATRIX).isEqualTo("MidToPrevSkyMatrix");
+        assertThat(ShaderConstants.UNIFORM_MID_TO_CURR_SKY_MATRIX).isEqualTo("MidToCurrSkyMatrix");
+        assertThat(ShaderConstants.UNIFORM_DEBUG_LADDER_MODE).isEqualTo("uDebugLadderMode");
     }
 
     @Test

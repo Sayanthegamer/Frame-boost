@@ -19,13 +19,13 @@ public class FrameCaptureManager {
     private TextureTarget intermediateFrameFBO;
     private TextureTarget hudCompositeFBO;
     private TextureTarget entityMaskFBO;
-    private TextureTarget worldOnlyFBO;
 
     private int width = 0;
     private int height = 0;
     private long frameIndex = 0;
     private boolean hasPreviousFrame = false;
     private boolean ready = false;
+    private volatile boolean capturedThisFrame = false;
 
     public FrameCaptureManager() {
     }
@@ -70,52 +70,19 @@ public class FrameCaptureManager {
             intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
             hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, false, GpuFormat.RGBA8_UNORM);
             entityMaskFBO = new TextureTarget("framegen_entity_mask", width, height, false, GpuFormat.RGBA8_UNORM);
-            worldOnlyFBO = new TextureTarget("framegen_world_only", width, height, true, GpuFormat.RGBA8_UNORM);
+            if (RenderSystem.isOnRenderThread() && RenderSystem.tryGetDevice() != null && entityMaskFBO.getColorTexture() != null) {
+                CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+                encoder.clearColorTexture(entityMaskFBO.getColorTexture(), new org.joml.Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
+                encoder.submit();
+            }
         } catch (Throwable t) {
             LOGGER.error("Failed to allocate FrameCaptureManager RenderTargets", t);
         }
     }
 
-    public synchronized void captureWorldOnly(RenderTarget sourceTarget) {
+    public synchronized boolean captureCurrentFrame(RenderTarget sourceTarget) {
         if (sourceTarget == null || sourceTarget.width <= 0 || sourceTarget.height <= 0) {
-            return;
-        }
-
-        ensureDimensions(sourceTarget.width, sourceTarget.height);
-
-        try {
-            if (worldOnlyFBO != null && sourceTarget.getColorTexture() != null && worldOnlyFBO.getColorTexture() != null) {
-                CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-                encoder.copyTextureToTexture(
-                        sourceTarget.getColorTexture(),
-                        worldOnlyFBO.getColorTexture(),
-                        0,
-                        0, 0,
-                        0, 0,
-                        width, height
-                );
-
-                if (sourceTarget.getDepthTexture() != null && worldOnlyFBO.getDepthTexture() != null) {
-                    encoder.copyTextureToTexture(
-                            sourceTarget.getDepthTexture(),
-                            worldOnlyFBO.getDepthTexture(),
-                            0,
-                            0, 0,
-                            0, 0,
-                            width, height
-                    );
-                }
-
-                encoder.submit();
-            }
-        } catch (Throwable t) {
-            LOGGER.error("Error capturing unoccluded world background textures", t);
-        }
-    }
-
-    public synchronized void captureCurrentFrame(RenderTarget sourceTarget) {
-        if (sourceTarget == null || sourceTarget.width <= 0 || sourceTarget.height <= 0) {
-            return;
+            return false;
         }
 
         ensureDimensions(sourceTarget.width, sourceTarget.height);
@@ -145,10 +112,12 @@ public class FrameCaptureManager {
 
                 encoder.submit();
                 this.lastDepthTexture = currentFrameFBO.getDepthTexture();
+                return true;
             }
         } catch (Throwable t) {
             LOGGER.error("Error capturing current frame textures", t);
         }
+        return false;
     }
 
     public synchronized void advanceFrame() {
@@ -164,9 +133,18 @@ public class FrameCaptureManager {
         }
     }
 
+    public boolean isCapturedThisFrame() {
+        return capturedThisFrame;
+    }
+
+    public void setCapturedThisFrame(boolean capturedThisFrame) {
+        this.capturedThisFrame = capturedThisFrame;
+    }
+
     public synchronized void reset() {
         hasPreviousFrame = false;
         frameIndex = 0;
+        capturedThisFrame = false;
     }
 
     public synchronized void destroy() {
@@ -198,10 +176,6 @@ public class FrameCaptureManager {
         if (entityMaskFBO != null) {
             try { entityMaskFBO.destroyBuffers(); } catch (Throwable ignored) {}
             entityMaskFBO = null;
-        }
-        if (worldOnlyFBO != null) {
-            try { worldOnlyFBO.destroyBuffers(); } catch (Throwable ignored) {}
-            worldOnlyFBO = null;
         }
     }
 
@@ -243,10 +217,6 @@ public class FrameCaptureManager {
 
     public TextureTarget getEntityMaskFBO() {
         return entityMaskFBO;
-    }
-
-    public TextureTarget getWorldOnlyFBO() {
-        return worldOnlyFBO;
     }
 
     public com.mojang.blaze3d.textures.GpuTexture getLastDepthTexture() {
