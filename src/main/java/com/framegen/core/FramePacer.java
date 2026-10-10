@@ -28,6 +28,7 @@ public class FramePacer {
     private long probeFrameCounter = 0;
 
     private volatile boolean intermediateSynthesisSuccess = false;
+    private volatile boolean lastSynthesisSuccess = false;
 
     public FramePacer() {
     }
@@ -41,6 +42,10 @@ public class FramePacer {
 
     public boolean isIntermediateSynthesisSuccess() {
         return intermediateSynthesisSuccess;
+    }
+
+    public boolean isLastSynthesisSuccess() {
+        return lastSynthesisSuccess;
     }
 
     public synchronized void recordRenderStart() {
@@ -94,7 +99,7 @@ public class FramePacer {
                 float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
                 LOGGER.info(String.format(Locale.ROOT,
                         "[FrameGen Telemetry Probe] Base: %.1f FPS | Eff: %.1f Hz | CPU work: %.2f ms | Reproject: %s | Omega: %.1f deg/s | Gated: %b | SynthOk: %b",
-                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, intermediateSynthesisSuccess));
+                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, lastSynthesisSuccess));
             }
         }
     }
@@ -108,6 +113,7 @@ public class FramePacer {
             CameraMatrixTracker matrixTracker,
             FrameCaptureManager captureManager
     ) {
+        this.lastSynthesisSuccess = this.intermediateSynthesisSuccess;
         this.intermediateSynthesisSuccess = false;
         long currentNanoTime = System.nanoTime();
         if (lastFrameNanoTime != 0) {
@@ -273,5 +279,50 @@ public class FramePacer {
 
     public long getProbeFrameCounter() {
         return probeFrameCounter;
+    }
+
+    public synchronized long computeTargetHalfIntervalNanos() {
+        if (this.baseFps > 1.0) {
+            // Half-step interval: (1 second / baseFps) * 0.5 in nanoseconds
+            return (long) (500_000_000.0 / this.baseFps);
+        }
+        // Fallback default for 60Hz display (16.666 ms half-step)
+        return 16_666_666L;
+    }
+
+    public synchronized long computeRemainingWaitNanos(long elapsedNanos, long targetHalfIntervalNanos) {
+        if (this.lastFrameGated) {
+            return 0L;
+        }
+        long remaining = targetHalfIntervalNanos - elapsedNanos;
+        return Math.max(0L, remaining);
+    }
+
+    public void performHybridWait(long waitNanos) {
+        if (waitNanos <= 0) {
+            return;
+        }
+        long targetEnd = System.nanoTime() + waitNanos;
+        // Park/sleep for the coarse portion (if > 1.5ms) to keep CPU low
+        long coarseNanos = waitNanos - 1_500_000L;
+        if (coarseNanos > 0) {
+            java.util.concurrent.locks.LockSupport.parkNanos(coarseNanos);
+        }
+        // Fine-grained busy spin for terminal sub-millisecond precision
+        while (System.nanoTime() < targetEnd) {
+            Thread.onSpinWait();
+        }
+    }
+
+    public void paceIntermediatePresentation(long intermPresentNanoTime) {
+        if (intermPresentNanoTime <= 0 || this.lastFrameGated) {
+            return;
+        }
+        long elapsedSincePresent = System.nanoTime() - intermPresentNanoTime;
+        long targetHalfInterval = computeTargetHalfIntervalNanos();
+        long remainingWait = computeRemainingWaitNanos(elapsedSincePresent, targetHalfInterval);
+        if (remainingWait > 0) {
+            performHybridWait(remainingWait);
+        }
     }
 }

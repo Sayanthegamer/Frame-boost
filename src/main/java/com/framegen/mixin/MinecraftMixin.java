@@ -64,6 +64,9 @@ public abstract class MinecraftMixin {
     private void framegen$onBeforeBasePresent(boolean renderLevel, CallbackInfo ci) {
         long intermTime = FramePacer.getInstance().getLastIntermediatePresentNanoTime();
         if (intermTime > 0) {
+            // Synchronous Cadence Pacing: Hold intermediate frame on screen for full half-interval
+            FramePacer.getInstance().paceIntermediatePresentation(intermTime);
+
             long deltaNs = System.nanoTime() - intermTime;
             double deltaMs = deltaNs / 1_000_000.0;
             if (FramePacer.getInstance().getProbeFrameCounter() % 120 == 0) {
