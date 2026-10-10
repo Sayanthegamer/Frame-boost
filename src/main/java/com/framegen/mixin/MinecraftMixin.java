@@ -68,8 +68,9 @@ public abstract class MinecraftMixin {
             double deltaMs = deltaNs / 1_000_000.0;
             if (FramePacer.getInstance().getProbeFrameCounter() % 120 == 0) {
                 double targetSpacing = FramePacer.getInstance().getBaseFps() > 0 ? (1000.0 / (2.0 * FramePacer.getInstance().getBaseFps())) : 16.67;
-                LOGGER.info("[Cadence Probe] Intermediate present -> Base present delta: {:.3f} ms (Target half-step spacing: {:.2f} ms)",
-                        deltaMs, targetSpacing);
+                LOGGER.info(String.format(java.util.Locale.ROOT,
+                        "[Cadence Probe] Intermediate present -> Base present delta: %.3f ms (Target half-step spacing: %.2f ms)",
+                        deltaMs, targetSpacing));
             }
         }
     }

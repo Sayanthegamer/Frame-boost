@@ -252,5 +252,55 @@ class MatrixMathTest {
         assertThat(reprojectedCurrNDC.y).isCloseTo(currDirectNDC.y, within(1e-4f));
         assertThat(reprojectedCurrNDC.z).isCloseTo(currDirectNDC.z, within(1e-4f));
     }
+
+    @Test
+    void testReverseZGlZeroToOneNDCInterpretation() {
+        // Minecraft 26.2 Blaze3D Reverse-Z projection with glClipControl(GL_ZERO_TO_ONE)
+        // Standard Reverse-Z matrix:
+        // x_clip = x / tan(fov/2) / aspect
+        // y_clip = y / tan(fov/2)
+        // z_clip = near (at near plane z = -near, z_clip/w = near/near = 1.0; at far, z_clip/w -> 0.0)
+        // w_clip = -z
+        float fov = (float) Math.toRadians(70.0);
+        float aspect = 16.0f / 9.0f;
+        float near = 0.05f;
+        
+        Matrix4f revZProj = new Matrix4f().zero();
+        revZProj.m00(1.0f / ((float) Math.tan(fov * 0.5f) * aspect));
+        revZProj.m11(1.0f / (float) Math.tan(fov * 0.5f));
+        revZProj.m22(0.0f); // far at infinity
+        revZProj.m32(near); // z_clip = near
+        revZProj.m23(-1.0f); // w_clip = -z
+
+        Matrix4f view = new Matrix4f().identity(); // camera at (0,0,0) looking down -Z
+        Matrix4f vp = new Matrix4f(revZProj).mul(view);
+        Matrix4f invVP = new Matrix4f(vp).invert();
+
+        // Point at (0, 0, -10.0)
+        Vector4f worldP = new Vector4f(0, 0, -10.0f, 1.0f);
+        Vector4f clipP = new Vector4f();
+        vp.transform(worldP, clipP);
+
+        // In GL_ZERO_TO_ONE Reverse-Z:
+        // depth d = clipP.z / clipP.w = near / 10.0 = 0.05 / 10 = 0.005
+        float depth = clipP.z / clipP.w;
+        assertThat(depth).isCloseTo(0.005f, within(1e-4f));
+
+        // Contract 1: With z_NDC = depth (GL_ZERO_TO_ONE correct mapping):
+        Vector4f ndcCorrect = new Vector4f(0, 0, depth, 1.0f);
+        Vector4f unprojCorrect = new Vector4f();
+        invVP.transform(ndcCorrect, unprojCorrect);
+        unprojCorrect.div(unprojCorrect.w);
+        assertThat(unprojCorrect.z).isCloseTo(-10.0f, within(1e-3f));
+
+        // Contract 2: With buggy legacy z_NDC = 1.0 - 2.0 * depth:
+        // 1.0 - 2.0 * 0.005 = 0.99 (which corresponds to near plane z ~ -0.05m instead of -10m!)
+        Vector4f ndcBuggy = new Vector4f(0, 0, 1.0f - 2.0f * depth, 1.0f);
+        Vector4f unprojBuggy = new Vector4f();
+        invVP.transform(ndcBuggy, unprojBuggy);
+        unprojBuggy.div(unprojBuggy.w);
+        // Proves that buggy mapping produces distance ~ -0.05m (off by a factor of 200x!), destroying reprojection!
+        assertThat(unprojBuggy.z).isNotCloseTo(-10.0f, within(1.0f));
+    }
 }
 

@@ -24,8 +24,9 @@ void main() {
     float dP = texture(PreviousDepthSampler, texCoord).r;
 
     // Iterative refinement pass 1 & 2 for Frame N candidate
+    // In Blaze3D with glClipControl(GL_ZERO_TO_ONE), zNDC == depth in [0, 1]
     for (int i = 0; i < 2; ++i) {
-        float zN = 1.0 - dN * 2.0;
+        float zN = dN;
         vec4 pN = vec4(texCoord * 2.0 - 1.0, zN, 1.0);
         vec4 cN = MidToCurrMatrix * pN;
         if (cN.w > 0.0) {
@@ -38,7 +39,7 @@ void main() {
 
     // Iterative refinement pass 1 & 2 for Frame N-1 candidate
     for (int i = 0; i < 2; ++i) {
-        float zP = 1.0 - dP * 2.0;
+        float zP = dP;
         vec4 pP = vec4(texCoord * 2.0 - 1.0, zP, 1.0);
         vec4 cP = MidToPrevMatrix * pP;
         if (cP.w > 0.0) {
@@ -53,24 +54,11 @@ void main() {
     // In Reverse-Z, larger depth is nearer surface: dMid = max(dN, dP)
     float dMid = max(dN, dP);
 
-    // Depth dilation around foreground silhouettes if configured
-    if (DepthDilationRadius > 0.0 && dMid > 0.0001) {
-        vec2 texelSize = 1.0 / max(ScreenSize, vec2(1.0, 1.0));
-        for (int y = -1; y <= 1; ++y) {
-            for (int x = -1; x <= 1; ++x) {
-                if (x == 0 && y == 0) continue;
-                vec2 offset = vec2(float(x), float(y)) * texelSize * DepthDilationRadius;
-                float dSampleN = texture(CurrentDepthSampler, texCoord + offset).r;
-                float dSampleP = texture(PreviousDepthSampler, texCoord + offset).r;
-                dMid = max(dMid, max(dSampleN, dSampleP));
-            }
-        }
-    }
-
     // Sky Decision: Sky (dMid <= 0.0001) is evaluated strictly after refinement
+    // In GL_ZERO_TO_ONE Reverse-Z, far sky plane is z = 0.0
     if (dMid <= 0.0001) {
-        // Pure rotation sky warping
-        vec4 skyPoint = vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+        // Pure rotation sky warping at far plane z = 0.0
+        vec4 skyPoint = vec4(texCoord * 2.0 - 1.0, 0.0, 1.0);
         vec4 cSkyCurr = MidToCurrSkyMatrix * skyPoint;
         vec4 cSkyPrev = MidToPrevSkyMatrix * skyPoint;
 
@@ -98,26 +86,27 @@ void main() {
     }
 
     // 2. Validate BOTH Sources against single mid-surface point P_mid
-    float zNDC = 1.0 - dMid * 2.0;
+    // In GL_ZERO_TO_ONE, zNDC == dMid
+    float zNDC = dMid;
     vec4 pMid = vec4(texCoord * 2.0 - 1.0, zNDC, 1.0);
 
     // Reproject P_mid into Frame N (Current)
     vec4 clipN = MidToCurrMatrix * pMid;
     vec3 ndcN = clipN.xyz / max(clipN.w, 0.00001);
     vec2 uvN = ndcN.xy * 0.5 + 0.5;
-    float expectedDepthN = (1.0 - ndcN.z) * 0.5;
+    float expectedDepthN = ndcN.z;
 
     // Reproject P_mid into Frame N-1 (Previous)
     vec4 clipP = MidToPrevMatrix * pMid;
     vec3 ndcP = clipP.xyz / max(clipP.w, 0.00001);
     vec2 uvP = ndcP.xy * 0.5 + 0.5;
-    float expectedDepthP = (1.0 - ndcP.z) * 0.5;
+    float expectedDepthP = ndcP.z;
 
     bool uvInBoundsN = (uvN.x >= 0.0 && uvN.x <= 1.0 && uvN.y >= 0.0 && uvN.y <= 1.0 && clipN.w > 0.0);
     bool uvInBoundsP = (uvP.x >= 0.0 && uvP.x <= 1.0 && uvP.y >= 0.0 && uvP.y <= 1.0 && clipP.w > 0.0);
 
-    float tauN = max(0.02 * max(expectedDepthN, 0.001), 0.005);
-    float tauP = max(0.02 * max(expectedDepthP, 0.001), 0.005);
+    float tauN = max(0.05 * max(expectedDepthN, 0.001), 0.005);
+    float tauP = max(0.05 * max(expectedDepthP, 0.001), 0.005);
 
     bool validN = false;
     if (uvInBoundsN) {

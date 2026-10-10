@@ -92,8 +92,9 @@ public class FramePacer {
                         ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
                         : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
                 float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
-                LOGGER.info("[FrameGen Telemetry Probe] Base: {:.1f} FPS | Eff: {:.1f} Hz | CPU work: {:.2f} ms | Reproject: {} | Omega: {:.1f}°/s | Gated: {} | SynthOk: {}",
-                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, intermediateSynthesisSuccess);
+                LOGGER.info(String.format(Locale.ROOT,
+                        "[FrameGen Telemetry Probe] Base: %.1f FPS | Eff: %.1f Hz | CPU work: %.2f ms | Reproject: %s | Omega: %.1f deg/s | Gated: %b | SynthOk: %b",
+                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, intermediateSynthesisSuccess));
             }
         }
     }
