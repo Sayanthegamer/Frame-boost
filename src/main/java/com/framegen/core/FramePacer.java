@@ -24,6 +24,8 @@ public class FramePacer {
     private boolean lastFrameGated = false;
     private long renderStartNanoTime = 0;
     private volatile double cpuWorkTimeMs = 0.0;
+    private volatile long lastIntermediatePresentNanoTime = 0;
+    private long probeFrameCounter = 0;
 
     private volatile boolean intermediateSynthesisSuccess = false;
 
@@ -70,6 +72,7 @@ public class FramePacer {
         this.lastFrameGated = false;
         this.renderStartNanoTime = 0;
         this.cpuWorkTimeMs = 0.0;
+        this.lastIntermediatePresentNanoTime = 0;
     }
 
     public synchronized void recordBaseFrame(long frameDurationNanos) {
@@ -83,6 +86,15 @@ public class FramePacer {
                 this.baseFps = (this.baseFps * 0.9) + (fps * 0.1);
             }
             this.effectiveFps = this.baseFps * 2.0;
+
+            if (++this.probeFrameCounter % 120 == 0) {
+                String timeStr = reprojectionTimeMs < 0.01
+                        ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
+                        : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
+                float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
+                LOGGER.info("[FrameGen Telemetry Probe] Base: {:.1f} FPS | Eff: {:.1f} Hz | CPU work: {:.2f} ms | Reproject: {} | Omega: {:.1f}°/s | Gated: {} | SynthOk: {}",
+                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, intermediateSynthesisSuccess);
+            }
         }
     }
 
@@ -199,6 +211,7 @@ public class FramePacer {
             windowSurface.blitFromTexture(encoder, targetToPresent.getColorTextureView());
             encoder.submit();
             windowSurface.present();
+            this.lastIntermediatePresentNanoTime = System.nanoTime();
             windowSurface.acquireNextTexture();
 
             return true;
@@ -251,5 +264,13 @@ public class FramePacer {
 
     public ReprojectionShaderPass getShaderPass() {
         return shaderPass;
+    }
+
+    public long getLastIntermediatePresentNanoTime() {
+        return lastIntermediatePresentNanoTime;
+    }
+
+    public long getProbeFrameCounter() {
+        return probeFrameCounter;
     }
 }

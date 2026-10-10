@@ -51,4 +51,26 @@ public abstract class MinecraftMixin {
             captureManager.setCapturedThisFrame(false);
         }
     }
+
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("FrameGenCadence");
+
+    @Inject(
+            method = "renderFrame",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/systems/GpuSurface;present()V"
+            )
+    )
+    private void framegen$onBeforeBasePresent(boolean renderLevel, CallbackInfo ci) {
+        long intermTime = FramePacer.getInstance().getLastIntermediatePresentNanoTime();
+        if (intermTime > 0) {
+            long deltaNs = System.nanoTime() - intermTime;
+            double deltaMs = deltaNs / 1_000_000.0;
+            if (FramePacer.getInstance().getProbeFrameCounter() % 120 == 0) {
+                double targetSpacing = FramePacer.getInstance().getBaseFps() > 0 ? (1000.0 / (2.0 * FramePacer.getInstance().getBaseFps())) : 16.67;
+                LOGGER.info("[Cadence Probe] Intermediate present -> Base present delta: {:.3f} ms (Target half-step spacing: {:.2f} ms)",
+                        deltaMs, targetSpacing);
+            }
+        }
+    }
 }

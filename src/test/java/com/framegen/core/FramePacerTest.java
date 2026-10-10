@@ -73,4 +73,14 @@ class FramePacerTest {
         assertThat(telemetry).contains("Reproject (CPU):");
         assertThat(telemetry).contains("1 (FIFO)");
     }
+
+    @Test
+    void testProbeCounterAndReset() {
+        assertThat(framePacer.getProbeFrameCounter()).isEqualTo(0);
+        assertThat(framePacer.getLastIntermediatePresentNanoTime()).isEqualTo(0);
+        framePacer.recordBaseFrame(16_666_666L);
+        assertThat(framePacer.getProbeFrameCounter()).isEqualTo(1);
+        framePacer.reset();
+        assertThat(framePacer.getLastIntermediatePresentNanoTime()).isEqualTo(0);
+    }
 }
