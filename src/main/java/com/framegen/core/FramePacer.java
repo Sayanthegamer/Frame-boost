@@ -315,7 +315,7 @@ public class FramePacer {
     }
 
     public void paceIntermediatePresentation(long intermPresentNanoTime) {
-        if (intermPresentNanoTime <= 0 || this.lastFrameGated) {
+        if (!FrameGenConfig.getInstance().isCadencePacingEnabled() || intermPresentNanoTime <= 0 || this.lastFrameGated) {
             return;
         }
         long elapsedSincePresent = System.nanoTime() - intermPresentNanoTime;

@@ -32,6 +32,7 @@ public class FrameGenConfig {
     private boolean debugLogGlDrift = false;
     private boolean debugLadderTintEnabled = false;
     private boolean debugCalibrationLog = false;
+    private boolean cadencePacingEnabled = false;
 
     public FrameGenConfig() {
     }
@@ -230,5 +231,13 @@ public class FrameGenConfig {
 
     public void setDebugCalibrationLog(boolean debugCalibrationLog) {
         this.debugCalibrationLog = debugCalibrationLog;
+    }
+
+    public boolean isCadencePacingEnabled() {
+        return cadencePacingEnabled;
+    }
+
+    public void setCadencePacingEnabled(boolean cadencePacingEnabled) {
+        this.cadencePacingEnabled = cadencePacingEnabled;
     }
 }

@@ -25,6 +25,7 @@ class FrameGenConfigTest {
         assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(50.0f);
         assertThat(config.isDebugLadderTintEnabled()).isFalse();
         assertThat(config.isDebugLogGlDrift()).isFalse();
+        assertThat(config.isCadencePacingEnabled()).isFalse();
     }
 
     @Test

@@ -206,10 +206,28 @@ public class ReprojectionShaderPass {
             vec4 interColor = texture(IntermediateSampler, texCoord);
             vec4 mainColor = texture(MainColorSampler, texCoord);
             vec4 worldColor = texture(WorldOnlySampler, texCoord);
+
             vec3 diff = abs(mainColor.rgb - worldColor.rgb);
             float maxDiff = max(diff.r, max(diff.g, diff.b));
-            float isHud = step(0.08, maxDiff);
-            fragColor = vec4(mix(interColor.rgb, mainColor.rgb, isHud), 1.0);
+
+            if (maxDiff < 0.03) {
+                fragColor = vec4(interColor.rgb, 1.0);
+                return;
+            }
+
+            vec3 safeWorld = max(worldColor.rgb, vec3(0.001));
+            vec3 scale = mainColor.rgb / safeWorld;
+            float scaleMax = max(scale.r, max(scale.g, scale.b));
+            float scaleMin = min(scale.r, min(scale.g, scale.b));
+            bool isScalarDarkening = (scaleMax <= 1.05) && ((scaleMax - scaleMin) < 0.15);
+
+            if (isScalarDarkening) {
+                float vignetteFactor = clamp((scale.r + scale.g + scale.b) / 3.0, 0.0, 1.0);
+                fragColor = vec4(interColor.rgb * vignetteFactor, 1.0);
+            } else {
+                float isHud = step(0.06, maxDiff);
+                fragColor = vec4(mix(interColor.rgb, mainColor.rgb, isHud), 1.0);
+            }
         }
         """;
 
