@@ -207,27 +207,35 @@ public class ReprojectionShaderPass {
             vec4 mainColor = texture(MainColorSampler, texCoord);
             vec4 worldColor = texture(WorldOnlySampler, texCoord);
 
-            vec3 diff = abs(mainColor.rgb - worldColor.rgb);
-            float maxDiff = max(diff.r, max(diff.g, diff.b));
+            // Compute luminance for world and main
+            float lumWorld = dot(worldColor.rgb, vec3(0.299, 0.587, 0.114));
+            float lumMain = dot(mainColor.rgb, vec3(0.299, 0.587, 0.114));
 
-            if (maxDiff < 0.03) {
-                fragColor = vec4(interColor.rgb, 1.0);
-                return;
-            }
+            // Continuous Vignette Transmission Factor V:
+            // In vanilla Minecraft, the vignette is purely subtractive/multiplicative: V <= 1.0.
+            // Using smoothstep transition near pitch black avoids any 8-bit division noise.
+            float vRatio = lumMain / max(lumWorld, 0.0001);
+            float vClamped = clamp(vRatio, 0.0, 1.0);
+            float lumWeight = smoothstep(0.001, 0.01, lumWorld);
+            float V = mix(1.0, vClamped, lumWeight);
 
-            vec3 safeWorld = max(worldColor.rgb, vec3(0.001));
-            vec3 scale = mainColor.rgb / safeWorld;
-            float scaleMax = max(scale.r, max(scale.g, scale.b));
-            float scaleMin = min(scale.r, min(scale.g, scale.b));
-            bool isScalarDarkening = (scaleMax <= 1.05) && ((scaleMax - scaleMin) < 0.15);
+            // Intermediate world with continuous vignette applied:
+            vec3 interVignetted = interColor.rgb * V;
 
-            if (isScalarDarkening) {
-                float vignetteFactor = clamp((scale.r + scale.g + scale.b) / 3.0, 0.0, 1.0);
-                fragColor = vec4(interColor.rgb * vignetteFactor, 1.0);
-            } else {
-                float isHud = step(0.06, maxDiff);
-                fragColor = vec4(mix(interColor.rgb, mainColor.rgb, isHud), 1.0);
-            }
+            // Detect HUD / Viewmodel elements:
+            // 1. Any channel brightening beyond world color (vignette NEVER brightens)
+            float brighten = max(0.0, max(mainColor.r - worldColor.r, max(mainColor.g - worldColor.g, mainColor.b - worldColor.b)));
+            float hudBright = smoothstep(0.02, 0.05, brighten);
+
+            // 2. Chromatic divergence from expected scalar vignette darkening
+            vec3 expectedVignette = worldColor.rgb * V;
+            vec3 diffV = abs(mainColor.rgb - expectedVignette);
+            float maxDiffV = max(diffV.r, max(diffV.g, diffV.b));
+            float hudDiff = smoothstep(0.03, 0.07, maxDiffV);
+
+            float hudFactor = clamp(max(hudBright, hudDiff), 0.0, 1.0);
+
+            fragColor = vec4(mix(interVignetted, mainColor.rgb, hudFactor), 1.0);
         }
         """;
 
@@ -291,7 +299,8 @@ public class ReprojectionShaderPass {
             GL20.glDeleteShader(fsh);
 
             // Compile HUD Composite Shader
-            int hudFsh = compileShader(GL20.GL_FRAGMENT_SHADER, DEFAULT_HUD_FSH);
+            String hudFshSource = loadShaderResource("/assets/framegen/shaders/hud_composite.fsh", DEFAULT_HUD_FSH);
+            int hudFsh = compileShader(GL20.GL_FRAGMENT_SHADER, hudFshSource);
             hudProgramId = GL20.glCreateProgram();
             GL20.glAttachShader(hudProgramId, vsh);
             GL20.glAttachShader(hudProgramId, hudFsh);
@@ -323,9 +332,9 @@ public class ReprojectionShaderPass {
             uDebugLadderMode = GL20.glGetUniformLocation(programId, ShaderConstants.UNIFORM_DEBUG_LADDER_MODE);
 
             // Query uniform locations - HUD Composite
-            uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, "IntermediateSampler");
-            uHudMain = GL20.glGetUniformLocation(hudProgramId, "MainColorSampler");
-            uHudWorldOnly = GL20.glGetUniformLocation(hudProgramId, "WorldOnlySampler");
+            uHudIntermediate = GL20.glGetUniformLocation(hudProgramId, ShaderConstants.UNIFORM_HUD_INTERMEDIATE);
+            uHudMain = GL20.glGetUniformLocation(hudProgramId, ShaderConstants.UNIFORM_HUD_MAIN);
+            uHudWorldOnly = GL20.glGetUniformLocation(hudProgramId, ShaderConstants.UNIFORM_HUD_WORLD_ONLY);
 
             // OpenGL 3.3 Sampler Objects (Zero texture parameter mutation)
             colorSamplerId = GL33.glGenSamplers();
@@ -894,6 +903,57 @@ public class ReprojectionShaderPass {
                 LOGGER.warn("[GL State Drift Probe] State mutation detected in {}:{}", passName, sb.toString());
             }
         }
+    }
+
+    /**
+     * Mathematical model of the HUD/Vignette composite fragment shader for headless verification.
+     * Computes the blended RGB output and hudFactor given intermediate world, full main with HUD, and base world-only color.
+     */
+    public static float[] evaluateHudCompositeMath(float[] interRgb, float[] mainRgb, float[] worldRgb) {
+        float lumWorld = 0.299f * worldRgb[0] + 0.587f * worldRgb[1] + 0.114f * worldRgb[2];
+        float lumMain = 0.299f * mainRgb[0] + 0.587f * mainRgb[1] + 0.114f * mainRgb[2];
+
+        float vRatio = lumMain / Math.max(lumWorld, 0.0001f);
+        float vClamped = Math.clamp(vRatio, 0.0f, 1.0f);
+        float lumWeight = smoothstep(0.001f, 0.01f, lumWorld);
+        float V = (1.0f - lumWeight) * 1.0f + lumWeight * vClamped;
+
+        float[] interVignetted = new float[] {
+                interRgb[0] * V,
+                interRgb[1] * V,
+                interRgb[2] * V
+        };
+
+        float brighten = Math.max(0.0f, Math.max(
+                mainRgb[0] - worldRgb[0],
+                Math.max(mainRgb[1] - worldRgb[1], mainRgb[2] - worldRgb[2])
+        ));
+        float hudBright = smoothstep(0.02f, 0.05f, brighten);
+
+        float[] expectedVignette = new float[] {
+                worldRgb[0] * V,
+                worldRgb[1] * V,
+                worldRgb[2] * V
+        };
+        float maxDiffV = Math.max(
+                Math.abs(mainRgb[0] - expectedVignette[0]),
+                Math.max(Math.abs(mainRgb[1] - expectedVignette[1]), Math.abs(mainRgb[2] - expectedVignette[2]))
+        );
+        float hudDiff = smoothstep(0.03f, 0.07f, maxDiffV);
+
+        float hudFactor = Math.clamp(Math.max(hudBright, hudDiff), 0.0f, 1.0f);
+
+        return new float[] {
+                (1.0f - hudFactor) * interVignetted[0] + hudFactor * mainRgb[0],
+                (1.0f - hudFactor) * interVignetted[1] + hudFactor * mainRgb[1],
+                (1.0f - hudFactor) * interVignetted[2] + hudFactor * mainRgb[2],
+                hudFactor
+        };
+    }
+
+    private static float smoothstep(float edge0, float edge1, float x) {
+        float t = Math.clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
     }
 }
 

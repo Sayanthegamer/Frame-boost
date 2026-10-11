@@ -23,6 +23,9 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_MID_TO_PREV_SKY_MATRIX).isEqualTo("MidToPrevSkyMatrix");
         assertThat(ShaderConstants.UNIFORM_MID_TO_CURR_SKY_MATRIX).isEqualTo("MidToCurrSkyMatrix");
         assertThat(ShaderConstants.UNIFORM_DEBUG_LADDER_MODE).isEqualTo("uDebugLadderMode");
+        assertThat(ShaderConstants.UNIFORM_HUD_INTERMEDIATE).isEqualTo("IntermediateSampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_MAIN).isEqualTo("MainColorSampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_WORLD_ONLY).isEqualTo("WorldOnlySampler");
     }
 
     @Test
