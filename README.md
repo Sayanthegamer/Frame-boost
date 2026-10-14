@@ -21,7 +21,9 @@ Unlike proprietary vendor solutions (DLSS 3, FSR 3) or heavy neural network mode
 - **🔄 Modern Reverse-Z Architecture:** Custom-tailored for Mojang's Reverse-Z depth buffer ($1.0 = \text{near}, 0.0 = \text{far}$) with far-plane sky tracking.
 - **🎯 Seamless HUD & Vignette Compositing:** Dual-pass post-processing with continuous luminance tracking and smoothstep chromatic isolation. Crosshairs, hotbars, text, hearts, and screen vignettes render crisp with zero outline artifacts or flickering.
 - **💡 100% Fullbright & Lightmap Compatible:** Operates downstream of terrain and block lighting, preserving all gamma tweaks, Night Vision, and lighting mods transparently.
-- **⏱️ Velocity Gating:** Automatically detects rapid camera snaps or lag spikes and gates reprojection to prevent tearing or ghosting.
+- **🛡️ Zero DWM Desktop Bleed & Alpha Sanitization:** Hardware-masked alpha clearing (`A = 1.0`) across `mainRenderTarget` and default swapchain `FBO 0`, permanently preventing Windows 11 DWM, Windhawk, or translucent window compositors from bleeding desktop wallpapers through unrendered sky and fog.
+- **🌌 Nether & End Divergence Damping:** Smoothstep chromatic divergence ramp on unprojected sky pixels eliminates 50% opacity ghosting on Nether ash particles, End portal beacons, and dynamic celestial edges.
+- **🖥️ GUI-Aware Frame Pacing:** Intelligently pauses intermediate 3D frame generation while inventories, chat, or pause menus are open, keeping background menu blur stable and mouse input crisp.
 - **📊 Real-time F3 Telemetry:** Displays base FPS, output refresh rate, CPU render work time, and reprojection shader duration directly in the F3 screen.
 
 ---
@@ -113,7 +115,7 @@ cd Frame-boost
 ./gradlew build
 ```
 
-Compiled mod JAR will be located in `build/libs/framegen-1.0.3.jar`.
+Compiled mod JAR will be located in `build/libs/framegen-1.0.4.jar`.
 
 ---
 
@@ -121,7 +123,7 @@ Compiled mod JAR will be located in `build/libs/framegen-1.0.3.jar`.
 
 1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft `26.2`.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft `26.2`.
-3. Drop `fabric-api.jar` and `framegen-1.0.3.jar` into your `.minecraft/mods` folder.
+3. Drop `fabric-api.jar` and `framegen-1.0.4.jar` into your `.minecraft/mods` folder.
 4. Launch the game with the Fabric profile.
 
 ---
