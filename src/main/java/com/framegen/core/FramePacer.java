@@ -108,6 +108,16 @@ public class FramePacer {
         this.reprojectionTimeMs = (double) reprojectionDurationNanos / 1_000_000.0;
     }
 
+    public void sanitizeRenderTargetAlpha(RenderTarget target) {
+        if (target != null && target.getColorTexture() != null && target.width > 0 && target.height > 0) {
+            shaderPass.sanitizeAlpha(target.getColorTexture(), target.width, target.height);
+        }
+    }
+
+    public void sanitizeWindowBackbufferAlpha() {
+        shaderPass.sanitizeDefaultFramebufferAlpha();
+    }
+
     public void onRenderTick(
             RenderTarget mainTarget,
             CameraMatrixTracker matrixTracker,
@@ -115,6 +125,7 @@ public class FramePacer {
     ) {
         this.lastSynthesisSuccess = this.intermediateSynthesisSuccess;
         this.intermediateSynthesisSuccess = false;
+        this.lastIntermediatePresentNanoTime = 0;
         long currentNanoTime = System.nanoTime();
         if (lastFrameNanoTime != 0) {
             recordBaseFrame(currentNanoTime - lastFrameNanoTime);
@@ -180,6 +191,7 @@ public class FramePacer {
     }
 
     public boolean presentIntermediateFrame(com.mojang.blaze3d.systems.GpuSurface windowSurface, RenderTarget mainTarget) {
+        this.lastIntermediatePresentNanoTime = 0;
         FrameGenConfig config = FrameGenConfig.getInstance();
         FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
 
@@ -217,6 +229,7 @@ public class FramePacer {
             com.mojang.blaze3d.systems.CommandEncoder encoder = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder();
             windowSurface.blitFromTexture(encoder, targetToPresent.getColorTextureView());
             encoder.submit();
+            shaderPass.sanitizeDefaultFramebufferAlpha();
             windowSurface.present();
             this.lastIntermediatePresentNanoTime = System.nanoTime();
             windowSurface.acquireNextTexture();

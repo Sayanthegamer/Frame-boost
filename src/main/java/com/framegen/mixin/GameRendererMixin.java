@@ -36,9 +36,26 @@ public abstract class GameRendererMixin {
             )
     )
     private void framegen$onBeforeClearDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
+        if (this.mainRenderTarget != null) {
+            // Sanitize mainRenderTarget alpha to 1.0 immediately after 3D world & fog rendering
+            // so unrendered horizon/sky fog (cleared with alpha=0.0) never bleeds desktop wallpaper
+            // or propagates transparent alpha into Menu Background Blur / post-processing passes.
+            FramePacer.getInstance().sanitizeRenderTargetAlpha(this.mainRenderTarget);
+        }
+
         if (this.mainRenderTarget != null && this.gameRenderState != null && this.gameRenderState.levelRenderState != null) {
             CameraRenderState cameraState = this.gameRenderState.levelRenderState.cameraRenderState;
             if (cameraState != null && cameraState.initialized && cameraState.viewRotationMatrix != null && cameraState.projectionMatrix != null) {
+                FrameGenConfig config = FrameGenConfig.getInstance();
+                FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
+
+                if (!config.isEnabled()) {
+                    captureManager.reset();
+                    CameraMatrixTracker.getInstance().reset();
+                    FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
+                    return;
+                }
+
                 Vec3 pos = cameraState.pos != null ? cameraState.pos : Vec3.ZERO;
                 Matrix4f viewMatrix = new Matrix4f(cameraState.viewRotationMatrix);
                 Matrix4f projMatrix = new Matrix4f(cameraState.projectionMatrix);
@@ -46,7 +63,7 @@ public abstract class GameRendererMixin {
                 float deltaSeconds = deltaTracker != null ? Math.max(0.0001f, deltaTracker.getRealtimeDeltaTicks() / 20.0f) : (1.0f / 60.0f);
                 CameraMatrixTracker.getInstance().updateMatrices(viewMatrix, projMatrix, pos.x, pos.y, pos.z, deltaSeconds);
 
-                if (FrameGenConfig.getInstance().isDebugCalibrationLog() && (framegen$calibrationCounter++ % 120 == 0)) {
+                if (config.isDebugCalibrationLog() && (framegen$calibrationCounter++ % 120 == 0)) {
                     float m22 = projMatrix.m22();
                     float m32 = projMatrix.m32();
                     float distNearStd = m32 / (1.0f + m22);
@@ -57,7 +74,6 @@ public abstract class GameRendererMixin {
                             m22, m32, distNearStd, distMidStd, distNearRev, distMidRev);
                 }
 
-                FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
                 boolean captured = captureManager.captureCurrentFrame(this.mainRenderTarget);
                 captureManager.setCapturedThisFrame(captured);
 
@@ -68,4 +84,3 @@ public abstract class GameRendererMixin {
         }
     }
 }
-

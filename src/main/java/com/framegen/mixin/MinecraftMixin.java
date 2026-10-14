@@ -39,13 +39,23 @@ public abstract class MinecraftMixin {
     private void framegen$onAfterGameRendererRender(boolean renderLevel, CallbackInfo ci) {
         FramePacer.getInstance().recordRenderEnd();
         com.framegen.capture.FrameCaptureManager captureManager = com.framegen.capture.FrameCaptureManager.getInstance();
+        com.mojang.blaze3d.pipeline.RenderTarget mainTarget = this.gameRenderer != null ? this.gameRenderer.mainRenderTarget() : null;
         try {
-            if (captureManager.isCapturedThisFrame()) {
-                com.mojang.blaze3d.pipeline.RenderTarget mainTarget = this.gameRenderer != null ? this.gameRenderer.mainRenderTarget() : null;
+            if (mainTarget != null) {
+                // Ensure mainRenderTarget has opaque alpha=1.0 after all HUD/vignette passes
+                // before Vanilla blits mainRenderTarget to windowSurface.
+                FramePacer.getInstance().sanitizeRenderTargetAlpha(mainTarget);
+            }
+
+            Minecraft mc = (Minecraft) (Object) this;
+            boolean guiScreenOpen = mc.gui != null && mc.gui.screen() != null;
+            if (captureManager.isCapturedThisFrame() && !guiScreenOpen) {
                 if (FramePacer.getInstance().presentIntermediateFrame(this.windowSurface, mainTarget)) {
                     this.frames++;
                 }
                 captureManager.advanceFrame();
+            } else if (guiScreenOpen) {
+                captureManager.reset();
             }
         } finally {
             captureManager.setCapturedThisFrame(false);
@@ -62,6 +72,9 @@ public abstract class MinecraftMixin {
             )
     )
     private void framegen$onBeforeBasePresent(boolean renderLevel, CallbackInfo ci) {
+        // Ensure default framebuffer (FBO 0) has alpha=1.0 before base frame presentation
+        FramePacer.getInstance().sanitizeWindowBackbufferAlpha();
+
         long intermTime = FramePacer.getInstance().getLastIntermediatePresentNanoTime();
         if (intermTime > 0) {
             // Synchronous Cadence Pacing: Hold intermediate frame on screen for full half-interval

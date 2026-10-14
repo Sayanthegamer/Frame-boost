@@ -108,7 +108,11 @@ public class ReprojectionShaderPass {
                 if (skyCurrValid && skyPrevValid) {
                     vec4 colCurr = texture(CurrentColorSampler, uvSkyCurr);
                     vec4 colPrev = texture(PreviousColorSampler, uvSkyPrev);
-                    fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, BlendFactor), 1.0);
+                    vec3 diff = abs(colCurr.rgb - colPrev.rgb);
+                    float deltaC = max(diff.r, max(diff.g, diff.b));
+                    float ramp = smoothstep(0.05, 0.25, deltaC);
+                    float wPrev = BlendFactor * (1.0 - ramp);
+                    fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, wPrev), 1.0);
                 } else if (skyCurrValid) {
                     fragColor = vec4(texture(CurrentColorSampler, uvSkyCurr).rgb, 1.0);
                     if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 1.0, 0.0, 1.0), 0.7);
@@ -484,6 +488,7 @@ public class ReprojectionShaderPass {
 
             int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
             if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
                 LOGGER.warn("Intermediate framebuffer incomplete: 0x{}", Integer.toHexString(status));
                 return false;
             }
@@ -556,6 +561,7 @@ public class ReprojectionShaderPass {
             GL30.glBindVertexArray(vaoId);
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
 
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
             return true;
         } catch (Throwable t) {
             LOGGER.error("Error executing ReprojectionShaderPass.render", t);
@@ -600,6 +606,7 @@ public class ReprojectionShaderPass {
 
             int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
             if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
                 LOGGER.warn("HUD composite framebuffer incomplete: 0x{}", Integer.toHexString(status));
                 return false;
             }
@@ -614,6 +621,7 @@ public class ReprojectionShaderPass {
             GL30.glBindVertexArray(vaoId);
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
 
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
             return true;
         } catch (Throwable t) {
             LOGGER.error("Error executing ReprojectionShaderPass.compositeHud", t);
@@ -623,6 +631,67 @@ public class ReprojectionShaderPass {
                 GlStateProbe probeAfter = GlStateProbe.capture();
                 probeBefore.compareAndLog("ReprojectionShaderPass.compositeHud", probeAfter);
             }
+        }
+    }
+
+    /**
+     * Forces the alpha channel of the given color texture to 1.0 (fully opaque) without modifying RGB values.
+     * Prevents Windows DWM / translucent window compositors from bleeding desktop wallpaper through sky/fog pixels
+     * where Minecraft clears or renders fog with alpha = 0.0, and eliminates opaque-vs-transparent frame strobing.
+     */
+    public synchronized boolean sanitizeAlpha(GpuTexture targetTexture, int width, int height) {
+        if (targetTexture == null || width <= 0 || height <= 0) {
+            return false;
+        }
+        if (!initialized) {
+            initialize();
+            if (!initialized) return false;
+        }
+
+        int targetTexId = getGlTextureId(targetTexture);
+        if (targetTexId == 0) return false;
+
+        try (GlStateSnapshot state = GlStateSnapshot.capture()) {
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_STENCIL_TEST);
+
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fboId);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, targetTexId, 0);
+
+            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
+                return false;
+            }
+
+            GL11.glColorMask(false, false, false, true);
+            GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("Error executing ReprojectionShaderPass.sanitizeAlpha", t);
+            return false;
+        }
+    }
+
+    /**
+     * Forces the alpha channel of the default window backbuffer (FBO 0) to 1.0 immediately prior to presentation.
+     */
+    public synchronized void sanitizeDefaultFramebufferAlpha() {
+        try (GlStateSnapshot state = GlStateSnapshot.capture()) {
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_STENCIL_TEST);
+
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
+            GL11.glColorMask(false, false, false, true);
+            GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+        } catch (Throwable t) {
+            LOGGER.error("Error executing ReprojectionShaderPass.sanitizeDefaultFramebufferAlpha", t);
         }
     }
 
@@ -721,6 +790,7 @@ public class ReprojectionShaderPass {
         private final int[] textureBindings = new int[5];
         private final int[] samplerBindings = new int[5];
         private final int[] viewport = new int[4];
+        private final float[] clearColor = new float[4];
         private final boolean colorMaskR;
         private final boolean colorMaskG;
         private final boolean colorMaskB;
@@ -744,6 +814,7 @@ public class ReprojectionShaderPass {
             this.vbo = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
             this.activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
             GL11.glGetIntegerv(GL11.GL_VIEWPORT, this.viewport);
+            GL11.glGetFloatv(GL11.GL_COLOR_CLEAR_VALUE, this.clearColor);
 
             try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
                 ByteBuffer maskBuf = stack.malloc(4);
@@ -799,8 +870,9 @@ public class ReprojectionShaderPass {
             }
             GL13.glActiveTexture(this.activeTexture);
 
-            // Restore viewport & rasterizer state
+            // Restore viewport, clear color & rasterizer state
             GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
+            GL11.glClearColor(this.clearColor[0], this.clearColor[1], this.clearColor[2], this.clearColor[3]);
             GL11.glColorMask(
                     this.colorMaskR,
                     this.colorMaskG,
@@ -956,4 +1028,3 @@ public class ReprojectionShaderPass {
         return t * t * (3.0f - 2.0f * t);
     }
 }
-

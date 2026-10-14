@@ -109,4 +109,15 @@ class HudCompositeShaderTest {
             assertThat(content).contains("smoothstep");
         }
     }
+
+    @Test
+    void testReprojectShaderResourceSkyDivergenceAndOpaqueAlpha() throws Exception {
+        try (InputStream in = getClass().getResourceAsStream("/assets/framegen/shaders/reproject.fsh")) {
+            assertThat(in).isNotNull();
+            String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(content).contains("#version 330 core");
+            assertThat(content).contains("vec3 diff = abs(colCurr.rgb - colPrev.rgb);");
+            assertThat(content).contains("fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, wPrev), 1.0);");
+        }
+    }
 }

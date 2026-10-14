@@ -71,7 +71,11 @@ void main() {
         if (skyCurrValid && skyPrevValid) {
             vec4 colCurr = texture(CurrentColorSampler, uvSkyCurr);
             vec4 colPrev = texture(PreviousColorSampler, uvSkyPrev);
-            fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, BlendFactor), 1.0);
+            vec3 diff = abs(colCurr.rgb - colPrev.rgb);
+            float deltaC = max(diff.r, max(diff.g, diff.b));
+            float ramp = smoothstep(0.05, 0.25, deltaC);
+            float wPrev = BlendFactor * (1.0 - ramp);
+            fragColor = vec4(mix(colCurr.rgb, colPrev.rgb, wPrev), 1.0);
         } else if (skyCurrValid) {
             fragColor = vec4(texture(CurrentColorSampler, uvSkyCurr).rgb, 1.0);
             if (uDebugLadderMode == 1) fragColor = mix(fragColor, vec4(0.0, 1.0, 0.0, 1.0), 0.7);
