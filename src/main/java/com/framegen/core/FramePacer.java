@@ -5,6 +5,9 @@ import com.framegen.config.FrameGenConfig;
 import com.framegen.shader.ReprojectionShaderPass;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuSurface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -190,7 +193,7 @@ public class FramePacer {
         }
     }
 
-    public boolean presentIntermediateFrame(com.mojang.blaze3d.systems.GpuSurface windowSurface, RenderTarget mainTarget) {
+    public boolean presentIntermediateFrame(GpuSurface windowSurface, RenderTarget mainTarget) {
         this.lastIntermediatePresentNanoTime = 0;
         FrameGenConfig config = FrameGenConfig.getInstance();
         FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
@@ -226,7 +229,7 @@ public class FramePacer {
                 }
             }
 
-            com.mojang.blaze3d.systems.CommandEncoder encoder = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder();
+            CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
             windowSurface.blitFromTexture(encoder, targetToPresent.getColorTextureView());
             encoder.submit();
             shaderPass.sanitizeDefaultFramebufferAlpha();

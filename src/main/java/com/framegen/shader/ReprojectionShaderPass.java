@@ -1,7 +1,7 @@
 package com.framegen.shader;
 
-import com.mojang.blaze3d.opengl.GlTexture;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.backend.opengl.GlTexture;
 import com.framegen.config.FrameGenConfig;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;

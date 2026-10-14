@@ -2,7 +2,7 @@
 ### Hardware-Agnostic 2x Frame Generation for Minecraft Java Edition
 
 [![Build Status](https://github.com/Sayanthegamer/Frame-boost/actions/workflows/build.yml/badge.svg)](https://github.com/Sayanthegamer/Frame-boost/actions/workflows/build.yml)
-[![Minecraft](https://img.shields.io/badge/Minecraft-26.2-brightgreen.svg)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-26.3-brightgreen.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/ModLoader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -93,8 +93,8 @@ Configuration is automatically saved to `.minecraft/config/framegen.json`:
 
 ## 📋 Requirements
 
-- **Minecraft:** `26.2`
-- **Mod Loader:** [Fabric Loader](https://fabricmc.net/) `0.19.3` or higher
+- **Minecraft:** `26.3`
+- **Mod Loader:** [Fabric Loader](https://fabricmc.net/) `0.19.5` or higher
 - **Library:** [Fabric API](https://modrinth.com/mod/fabric-api)
 - **Java:** `Java 25` or higher
 - **Graphics:** OpenGL 3.3+ Core Profile compatible GPU

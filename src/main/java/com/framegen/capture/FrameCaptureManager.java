@@ -1,11 +1,11 @@
 package com.framegen.capture;
 
-import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,11 +65,11 @@ public class FrameCaptureManager {
         this.hasPreviousFrame = false;
 
         try {
-            currentFrameFBO = new TextureTarget("framegen_current", width, height, true, GpuFormat.RGBA8_UNORM);
-            previousFrameFBO = new TextureTarget("framegen_previous", width, height, true, GpuFormat.RGBA8_UNORM);
-            intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, false, GpuFormat.RGBA8_UNORM);
-            hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, false, GpuFormat.RGBA8_UNORM);
-            entityMaskFBO = new TextureTarget("framegen_entity_mask", width, height, false, GpuFormat.RGBA8_UNORM);
+            currentFrameFBO = new TextureTarget("framegen_current", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
+            previousFrameFBO = new TextureTarget("framegen_previous", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
+            intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, GpuFormat.RGBA8_UNORM, null);
+            hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, GpuFormat.RGBA8_UNORM, null);
+            entityMaskFBO = new TextureTarget("framegen_entity_mask", width, height, GpuFormat.RGBA8_UNORM, null);
             if (RenderSystem.isOnRenderThread() && RenderSystem.tryGetDevice() != null && entityMaskFBO.getColorTexture() != null) {
                 CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
                 encoder.clearColorTexture(entityMaskFBO.getColorTexture(), new org.joml.Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
@@ -219,7 +219,7 @@ public class FrameCaptureManager {
         return entityMaskFBO;
     }
 
-    public com.mojang.blaze3d.textures.GpuTexture getLastDepthTexture() {
+    public GpuTexture getLastDepthTexture() {
         return lastDepthTexture;
     }
 }

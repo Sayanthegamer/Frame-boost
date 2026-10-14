@@ -1,7 +1,7 @@
 package com.framegen.mixin;
 
 import com.framegen.core.FramePacer;
-import com.mojang.blaze3d.systems.GpuSurface;
+import com.mojang.renderpearl.api.device.GpuSurface;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,7 +21,7 @@ public abstract class MinecraftMixin {
             method = "renderFrame",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V"
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render()V"
             )
     )
     private void framegen$onBeforeGameRendererRender(boolean renderLevel, CallbackInfo ci) {
@@ -32,7 +32,7 @@ public abstract class MinecraftMixin {
             method = "renderFrame",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V",
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render()V",
                     shift = At.Shift.AFTER
             )
     )
@@ -68,7 +68,7 @@ public abstract class MinecraftMixin {
             method = "renderFrame",
             at = @At(
                     value = "INVOKE",
-                    target = "Lcom/mojang/blaze3d/systems/GpuSurface;present()V"
+                    target = "Lcom/mojang/renderpearl/api/device/GpuSurface;present()V"
             )
     )
     private void framegen$onBeforeBasePresent(boolean renderLevel, CallbackInfo ci) {

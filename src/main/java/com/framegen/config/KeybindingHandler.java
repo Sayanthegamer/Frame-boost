@@ -5,7 +5,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 public class KeybindingHandler {
     private static KeyMapping toggleFrameGenKey;
@@ -13,8 +12,8 @@ public class KeybindingHandler {
     public static void register() {
         toggleFrameGenKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.framegen.toggle",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_F8,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_F8,
                 KeyMapping.Category.MISC
         ));
 

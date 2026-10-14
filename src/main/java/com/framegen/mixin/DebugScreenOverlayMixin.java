@@ -15,7 +15,7 @@ import java.util.List;
 public abstract class DebugScreenOverlayMixin {
 
     @Inject(method = "extractLines", at = @At("HEAD"))
-    private void framegen$addTelemetryToDebugScreen(GuiGraphicsExtractor extractor, List<String> list, boolean left, CallbackInfo ci) {
+    private void framegen$addTelemetryToDebugScreen(GuiGraphicsExtractor extractor, List<String> list, boolean left, int scaledScreenWidth, CallbackInfo ci) {
         if (left) {
             FrameGenConfig config = FrameGenConfig.getInstance();
             if (config.isDebugOverlayEnabled()) {

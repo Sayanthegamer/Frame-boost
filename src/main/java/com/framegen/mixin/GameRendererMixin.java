@@ -6,6 +6,7 @@ import com.framegen.core.CameraMatrixTracker;
 import com.framegen.core.FramePacer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.state.GameRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -25,6 +26,7 @@ public abstract class GameRendererMixin {
     private static final Logger LOGGER = LoggerFactory.getLogger("FrameGenCalibration");
     private static long framegen$calibrationCounter = 0;
 
+    @Shadow @Final private Minecraft minecraft;
     @Shadow @Final private GameRenderState gameRenderState;
     @Shadow private RenderTarget mainRenderTarget;
 
@@ -32,10 +34,10 @@ public abstract class GameRendererMixin {
             method = "renderLevel",
             at = @At(
                     value = "INVOKE",
-                    target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render3dHud(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lnet/minecraft/client/renderer/state/OptionsRenderState;Z)V"
             )
     )
-    private void framegen$onBeforeClearDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
+    private void framegen$onBeforeClearDepth(CallbackInfo ci) {
         if (this.mainRenderTarget != null) {
             // Sanitize mainRenderTarget alpha to 1.0 immediately after 3D world & fog rendering
             // so unrendered horizon/sky fog (cleared with alpha=0.0) never bleeds desktop wallpaper
@@ -60,6 +62,7 @@ public abstract class GameRendererMixin {
                 Matrix4f viewMatrix = new Matrix4f(cameraState.viewRotationMatrix);
                 Matrix4f projMatrix = new Matrix4f(cameraState.projectionMatrix);
 
+                DeltaTracker deltaTracker = this.minecraft != null ? this.minecraft.getDeltaTracker() : null;
                 float deltaSeconds = deltaTracker != null ? Math.max(0.0001f, deltaTracker.getRealtimeDeltaTicks() / 20.0f) : (1.0f / 60.0f);
                 CameraMatrixTracker.getInstance().updateMatrices(viewMatrix, projMatrix, pos.x, pos.y, pos.z, deltaSeconds);
 
