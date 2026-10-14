@@ -115,15 +115,15 @@ cd Frame-boost
 ./gradlew build
 ```
 
-Compiled mod JAR will be located in `build/libs/framegen-1.0.4.jar`.
+Compiled mod JAR will be located in `build/libs/framegen-1.0.5.jar`.
 
 ---
 
 ## 📥 Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft `26.2`.
-2. Download [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft `26.2`.
-3. Drop `fabric-api.jar` and `framegen-1.0.4.jar` into your `.minecraft/mods` folder.
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft `26.3`.
+2. Download [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft `26.3`.
+3. Drop `fabric-api.jar` and `framegen-1.0.5.jar` into your `.minecraft/mods` folder.
 4. Launch the game with the Fabric profile.
 
 ---
