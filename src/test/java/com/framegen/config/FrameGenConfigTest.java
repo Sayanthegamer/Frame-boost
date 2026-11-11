@@ -23,6 +23,13 @@ class FrameGenConfigTest {
         assertThat(config.getMaxTranslationVelocityThreshold()).isEqualTo(50.0f);
         assertThat(config.getMaxAbsoluteAngleThreshold()).isEqualTo(15.0f);
         assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(50.0f);
+        assertThat(config.isOpticalFlowEnabled()).isTrue();
+        assertThat(config.getOpticalFlowQualityMode()).isEqualTo(1);
+        assertThat(config.getOpticalFlowPresetLabel()).isEqualTo("PERF");
+        assertThat(config.getOpticalFlowSearchRadius()).isEqualTo(3.0f);
+        assertThat(config.isEntityMotionVectorsEnabled()).isTrue();
+        assertThat(config.getEntityVelocityMaxUv()).isEqualTo(0.125f);
+        assertThat(config.isViewmodelMotionInterpolationEnabled()).isTrue();
         assertThat(config.isDebugLadderTintEnabled()).isFalse();
         assertThat(config.isDebugLogGlDrift()).isFalse();
         assertThat(config.isCadencePacingEnabled()).isFalse();
@@ -39,6 +46,29 @@ class FrameGenConfigTest {
         newState = config.toggleEnabled();
         assertThat(newState).isTrue();
         assertThat(config.isEnabled()).isTrue();
+    }
+
+    @Test
+    void testCycleOpticalFlowQualityMode() {
+        FrameGenConfig config = new FrameGenConfig();
+        // Starts at 1 (PERFORMANCE)
+        assertThat(config.getOpticalFlowQualityMode()).isEqualTo(1);
+        assertThat(config.getOpticalFlowPresetLabel()).isEqualTo("PERF");
+
+        // 1 -> 2 (QUALITY)
+        assertThat(config.cycleOpticalFlowQualityMode()).isEqualTo(2);
+        assertThat(config.isOpticalFlowEnabled()).isTrue();
+        assertThat(config.getOpticalFlowPresetLabel()).isEqualTo("QUAL");
+
+        // 2 -> 0 (OFF)
+        assertThat(config.cycleOpticalFlowQualityMode()).isEqualTo(0);
+        assertThat(config.isOpticalFlowEnabled()).isFalse();
+        assertThat(config.getOpticalFlowPresetLabel()).isEqualTo("OFF");
+
+        // 0 -> 1 (PERFORMANCE)
+        assertThat(config.cycleOpticalFlowQualityMode()).isEqualTo(1);
+        assertThat(config.isOpticalFlowEnabled()).isTrue();
+        assertThat(config.getOpticalFlowPresetLabel()).isEqualTo("PERF");
     }
 
     @Test
@@ -79,6 +109,24 @@ class FrameGenConfigTest {
 
         config.setMaxFrameDurationThresholdMs(1000.0f);
         assertThat(config.getMaxFrameDurationThresholdMs()).isEqualTo(500.0f);
+
+        config.setOpticalFlowQualityMode(-5);
+        assertThat(config.getOpticalFlowQualityMode()).isEqualTo(0);
+
+        config.setOpticalFlowQualityMode(99);
+        assertThat(config.getOpticalFlowQualityMode()).isEqualTo(2);
+
+        config.setOpticalFlowSearchRadius(-3.0f);
+        assertThat(config.getOpticalFlowSearchRadius()).isEqualTo(0.0f);
+
+        config.setOpticalFlowSearchRadius(25.0f);
+        assertThat(config.getOpticalFlowSearchRadius()).isEqualTo(8.0f);
+
+        config.setEntityVelocityMaxUv(0.0001f);
+        assertThat(config.getEntityVelocityMaxUv()).isEqualTo(0.01f);
+
+        config.setEntityVelocityMaxUv(2.0f);
+        assertThat(config.getEntityVelocityMaxUv()).isEqualTo(0.5f);
     }
 
     @Test
@@ -92,6 +140,12 @@ class FrameGenConfigTest {
         original.setVelocityGatingEnabled(false);
         original.setMaxAngularVelocityThreshold(45.0f);
         original.setMaxTranslationVelocityThreshold(15.0f);
+        original.setOpticalFlowEnabled(true);
+        original.setOpticalFlowQualityMode(2);
+        original.setOpticalFlowSearchRadius(4.5f);
+        original.setEntityMotionVectorsEnabled(false);
+        original.setEntityVelocityMaxUv(0.25f);
+        original.setViewmodelMotionInterpolationEnabled(false);
 
         FrameGenConfig.save(original, configFile);
         assertThat(Files.exists(configFile)).isTrue();
@@ -104,6 +158,12 @@ class FrameGenConfigTest {
         assertThat(loaded.isVelocityGatingEnabled()).isFalse();
         assertThat(loaded.getMaxAngularVelocityThreshold()).isEqualTo(45.0f);
         assertThat(loaded.getMaxTranslationVelocityThreshold()).isEqualTo(15.0f);
+        assertThat(loaded.isOpticalFlowEnabled()).isTrue();
+        assertThat(loaded.getOpticalFlowQualityMode()).isEqualTo(2);
+        assertThat(loaded.getOpticalFlowSearchRadius()).isEqualTo(4.5f);
+        assertThat(loaded.isEntityMotionVectorsEnabled()).isFalse();
+        assertThat(loaded.getEntityVelocityMaxUv()).isEqualTo(0.25f);
+        assertThat(loaded.isViewmodelMotionInterpolationEnabled()).isFalse();
     }
 
     @Test

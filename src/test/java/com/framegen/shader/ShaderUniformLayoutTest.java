@@ -23,9 +23,19 @@ class ShaderUniformLayoutTest {
         assertThat(ShaderConstants.UNIFORM_MID_TO_PREV_SKY_MATRIX).isEqualTo("MidToPrevSkyMatrix");
         assertThat(ShaderConstants.UNIFORM_MID_TO_CURR_SKY_MATRIX).isEqualTo("MidToCurrSkyMatrix");
         assertThat(ShaderConstants.UNIFORM_DEBUG_LADDER_MODE).isEqualTo("uDebugLadderMode");
+        assertThat(ShaderConstants.UNIFORM_OPTICAL_FLOW_ENABLED).isEqualTo("uOpticalFlowEnabled");
+        assertThat(ShaderConstants.UNIFORM_OPTICAL_FLOW_QUALITY).isEqualTo("uOpticalFlowQuality");
+        assertThat(ShaderConstants.UNIFORM_OPTICAL_FLOW_RADIUS).isEqualTo("uOpticalFlowRadius");
+        assertThat(ShaderConstants.UNIFORM_ENTITY_VEL_MAX_UV).isEqualTo("uEntityVelMaxUV");
         assertThat(ShaderConstants.UNIFORM_HUD_INTERMEDIATE).isEqualTo("IntermediateSampler");
         assertThat(ShaderConstants.UNIFORM_HUD_MAIN).isEqualTo("MainColorSampler");
         assertThat(ShaderConstants.UNIFORM_HUD_WORLD_ONLY).isEqualTo("WorldOnlySampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_CURR_POST_HAND).isEqualTo("CurrPostHandSampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_PREV_POST_HAND).isEqualTo("PrevPostHandSampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_PREV_WORLD_ONLY).isEqualTo("PrevWorldOnlySampler");
+        assertThat(ShaderConstants.UNIFORM_HUD_SCREEN_SIZE).isEqualTo("HudScreenSize");
+        assertThat(ShaderConstants.UNIFORM_HUD_HAND_INTERP_ENABLED).isEqualTo("uHandInterpEnabled");
+        assertThat(ShaderConstants.UNIFORM_HUD_BLEND_FACTOR).isEqualTo("HudBlendFactor");
     }
 
     @Test

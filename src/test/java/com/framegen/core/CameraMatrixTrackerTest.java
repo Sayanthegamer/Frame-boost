@@ -176,6 +176,17 @@ class CameraMatrixTrackerTest {
     }
 
     @Test
+    void testStationaryCameraDoesNotGateOnServerTickLagSpike() {
+        Matrix4f view = new Matrix4f().lookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0, 1.0 / 60.0);
+        // Stationary camera during a 65ms server tick spike (~15 FPS)
+        tracker.updateMatrices(view, proj, 0.0, 0.0, 0.0, 0.065);
+
+        assertThat(tracker.getAngularDeltaDegrees()).isCloseTo(0.0f, within(1e-3f));
+        assertThat(tracker.isVelocityGated(720.0f, 50.0f, 15.0f, 50.0f)).isFalse();
+    }
+
+    @Test
     void testViewmodelPoseStackUpdateWithBobbing() {
         Matrix4f vmPose1 = new Matrix4f().translation(0.2f, -0.2f, -0.4f);
         // Bob hand upward and sway slightly
@@ -251,4 +262,3 @@ class CameraMatrixTrackerTest {
         assertThat(tracker.getMidToCurrMatrix()).isEqualTo(new Matrix4f().identity());
     }
 }
-

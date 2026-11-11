@@ -36,10 +36,11 @@ dependencies {
 }
 
 processResources {
-    inputs.property "version", project.version
+    def modVersion = project.version
+    inputs.property "version", modVersion
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": modVersion
     }
 }
 
@@ -61,4 +62,3 @@ test {
     useJUnitPlatform()
     forkEvery = 1
 }
-

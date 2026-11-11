@@ -222,6 +222,12 @@ public class CameraMatrixTracker {
         if (!hasPreviousFrame) {
             return true;
         }
+        // Stationary camera (Omega ~ 0 deg/s, delta ~ 0) never causes camera disocclusion voids,
+        // so server tick spikes (>50ms) while standing still must not falsely trigger GATED (SNAP).
+        boolean cameraMoved = angularDeltaDegrees > 0.05f || translationDelta > 0.01f;
+        if (!cameraMoved) {
+            return false;
+        }
         boolean rateGated = angularVelocityDegPerSec > maxAngularVelocityDegPerSec
                 || translationVelocityBlocksPerSec > maxTranslationVelocityBlocksPerSec;
         boolean lagOrSnapGated = angularDeltaDegrees > maxAbsoluteAngleThreshold

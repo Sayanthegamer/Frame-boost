@@ -28,6 +28,12 @@ public class FrameGenConfig {
     private float maxTranslationVelocityThreshold = 50.0f; // blocks / second
     private float maxAbsoluteAngleThreshold = 15.0f; // degrees hard snap ceiling
     private float maxFrameDurationThresholdMs = 50.0f; // ms hard lag spike ceiling (20 FPS)
+    private boolean opticalFlowEnabled = true;
+    private int opticalFlowQualityMode = 1; // 0 = OFF, 1 = PERFORMANCE (4-tap MX330 optimized), 2 = QUALITY (12-tap Ultra)
+    private float opticalFlowSearchRadius = 3.0f; // pixels search radius for non-rigid motion
+    private boolean entityMotionVectorsEnabled = true;
+    private float entityVelocityMaxUv = 0.125f; // max UV displacement encoded into RG8 entity velocity buffer
+    private boolean viewmodelMotionInterpolationEnabled = true; // Phase 3: 2x T=0.5 first-person hand & swing interpolation
     private boolean debugSkipRender = false;
     private boolean debugLogGlDrift = false;
     private boolean debugLadderTintEnabled = false;
@@ -116,6 +122,24 @@ public class FrameGenConfig {
         } else if (this.maxFrameDurationThresholdMs > 500.0f) {
             this.maxFrameDurationThresholdMs = 500.0f;
         }
+
+        if (this.opticalFlowQualityMode < 0) {
+            this.opticalFlowQualityMode = 0;
+        } else if (this.opticalFlowQualityMode > 2) {
+            this.opticalFlowQualityMode = 2;
+        }
+
+        if (this.opticalFlowSearchRadius < 0.0f) {
+            this.opticalFlowSearchRadius = 0.0f;
+        } else if (this.opticalFlowSearchRadius > 8.0f) {
+            this.opticalFlowSearchRadius = 8.0f;
+        }
+
+        if (this.entityVelocityMaxUv < 0.01f) {
+            this.entityVelocityMaxUv = 0.01f;
+        } else if (this.entityVelocityMaxUv > 0.5f) {
+            this.entityVelocityMaxUv = 0.5f;
+        }
     }
 
     public boolean isEnabled() {
@@ -129,6 +153,29 @@ public class FrameGenConfig {
     public boolean toggleEnabled() {
         this.enabled = !this.enabled;
         return this.enabled;
+    }
+
+    /**
+     * Cycles opticalFlowQualityMode: 1 (PERFORMANCE) -> 2 (QUALITY) -> 0 (OFF) -> 1 (PERFORMANCE).
+     */
+    public int cycleOpticalFlowQualityMode() {
+        if (!this.opticalFlowEnabled || this.opticalFlowQualityMode == 0) {
+            this.opticalFlowEnabled = true;
+            this.opticalFlowQualityMode = 1;
+        } else if (this.opticalFlowQualityMode == 1) {
+            this.opticalFlowQualityMode = 2;
+        } else {
+            this.opticalFlowQualityMode = 0;
+            this.opticalFlowEnabled = false;
+        }
+        return this.opticalFlowQualityMode;
+    }
+
+    public String getOpticalFlowPresetLabel() {
+        if (!this.opticalFlowEnabled || this.opticalFlowQualityMode == 0) {
+            return "OFF";
+        }
+        return this.opticalFlowQualityMode == 1 ? "PERF" : "QUAL";
     }
 
     public float getInterpolationFactor() {
@@ -199,6 +246,57 @@ public class FrameGenConfig {
     public void setMaxFrameDurationThresholdMs(float maxFrameDurationThresholdMs) {
         this.maxFrameDurationThresholdMs = maxFrameDurationThresholdMs;
         validate();
+    }
+
+    public boolean isOpticalFlowEnabled() {
+        return opticalFlowEnabled;
+    }
+
+    public void setOpticalFlowEnabled(boolean opticalFlowEnabled) {
+        this.opticalFlowEnabled = opticalFlowEnabled;
+    }
+
+    public int getOpticalFlowQualityMode() {
+        return opticalFlowQualityMode;
+    }
+
+    public void setOpticalFlowQualityMode(int opticalFlowQualityMode) {
+        this.opticalFlowQualityMode = opticalFlowQualityMode;
+        validate();
+    }
+
+    public float getOpticalFlowSearchRadius() {
+        return opticalFlowSearchRadius;
+    }
+
+    public void setOpticalFlowSearchRadius(float opticalFlowSearchRadius) {
+        this.opticalFlowSearchRadius = opticalFlowSearchRadius;
+        validate();
+    }
+
+    public boolean isEntityMotionVectorsEnabled() {
+        return entityMotionVectorsEnabled;
+    }
+
+    public void setEntityMotionVectorsEnabled(boolean entityMotionVectorsEnabled) {
+        this.entityMotionVectorsEnabled = entityMotionVectorsEnabled;
+    }
+
+    public float getEntityVelocityMaxUv() {
+        return entityVelocityMaxUv;
+    }
+
+    public void setEntityVelocityMaxUv(float entityVelocityMaxUv) {
+        this.entityVelocityMaxUv = entityVelocityMaxUv;
+        validate();
+    }
+
+    public boolean isViewmodelMotionInterpolationEnabled() {
+        return viewmodelMotionInterpolationEnabled;
+    }
+
+    public void setViewmodelMotionInterpolationEnabled(boolean viewmodelMotionInterpolationEnabled) {
+        this.viewmodelMotionInterpolationEnabled = viewmodelMotionInterpolationEnabled;
     }
 
     public boolean isDebugSkipRender() {

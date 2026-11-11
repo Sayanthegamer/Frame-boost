@@ -3,6 +3,8 @@ package com.framegen.mixin;
 import com.framegen.capture.FrameCaptureManager;
 import com.framegen.config.FrameGenConfig;
 import com.framegen.core.CameraMatrixTracker;
+import com.framegen.core.EntitySceneExtractor;
+import com.framegen.core.EntityVelocityTracker;
 import com.framegen.core.FramePacer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.DeltaTracker;
@@ -50,10 +52,12 @@ public abstract class GameRendererMixin {
             if (cameraState != null && cameraState.initialized && cameraState.viewRotationMatrix != null && cameraState.projectionMatrix != null) {
                 FrameGenConfig config = FrameGenConfig.getInstance();
                 FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
+                captureManager.setCapturedPostHandThisFrame(false);
 
                 if (!config.isEnabled()) {
                     captureManager.reset();
                     CameraMatrixTracker.getInstance().reset();
+                    EntityVelocityTracker.getInstance().reset();
                     FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
                     return;
                 }
@@ -65,6 +69,14 @@ public abstract class GameRendererMixin {
                 DeltaTracker deltaTracker = this.minecraft != null ? this.minecraft.getDeltaTracker() : null;
                 float deltaSeconds = deltaTracker != null ? Math.max(0.0001f, deltaTracker.getRealtimeDeltaTicks() / 20.0f) : (1.0f / 60.0f);
                 CameraMatrixTracker.getInstance().updateMatrices(viewMatrix, projMatrix, pos.x, pos.y, pos.z, deltaSeconds);
+
+                // Phase 2: Harvest dynamic entity poses using true sub-tick partialTick (getGameTimeDeltaPartialTick(false))
+                if (config.isEntityMotionVectorsEnabled() && this.minecraft != null) {
+                    float partialTick = deltaTracker != null ? Math.max(0.0f, Math.min(1.0f, deltaTracker.getGameTimeDeltaPartialTick(false))) : 1.0f;
+                    EntitySceneExtractor.extractEntities(this.minecraft, partialTick, EntityVelocityTracker.getInstance());
+                } else {
+                    EntityVelocityTracker.getInstance().reset();
+                }
 
                 if (config.isDebugCalibrationLog() && (framegen$calibrationCounter++ % 120 == 0)) {
                     float m22 = projMatrix.m22();
@@ -83,6 +95,25 @@ public abstract class GameRendererMixin {
                 if (captured) {
                     FramePacer.getInstance().onRenderTick(this.mainRenderTarget, CameraMatrixTracker.getInstance(), captureManager);
                 }
+            }
+        }
+    }
+
+    @Inject(
+            method = "renderLevel",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/GameRenderer;render3dHud(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lnet/minecraft/client/renderer/state/OptionsRenderState;Z)V",
+                    shift = At.Shift.AFTER
+            )
+    )
+    private void framegen$onAfterRender3dHud(CallbackInfo ci) {
+        if (this.mainRenderTarget != null) {
+            FramePacer.getInstance().sanitizeRenderTargetAlpha(this.mainRenderTarget);
+            FrameGenConfig config = FrameGenConfig.getInstance();
+            FrameCaptureManager captureManager = FrameCaptureManager.getInstance();
+            if (config.isEnabled() && captureManager.isCapturedThisFrame()) {
+                captureManager.capturePostHandFrame(this.mainRenderTarget);
             }
         }
     }

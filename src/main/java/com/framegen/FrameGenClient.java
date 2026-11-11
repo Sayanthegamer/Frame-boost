@@ -12,7 +12,7 @@ public class FrameGenClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        LOGGER.info("Universal Frame Generation (2x Reprojection Engine) initializing...");
+        LOGGER.info("Universal Frame Generation (2x Reprojection + Optical Flow & Entity Velocity Engine) initializing...");
         FrameGenConfig.getInstance();
         KeybindingHandler.register();
 
@@ -20,6 +20,7 @@ public class FrameGenClient implements ClientModInitializer {
             LOGGER.info("World disconnect detected; resetting frame generation buffers and tracking state.");
             com.framegen.capture.FrameCaptureManager.getInstance().reset();
             com.framegen.core.CameraMatrixTracker.getInstance().reset();
+            com.framegen.core.EntityVelocityTracker.getInstance().reset();
             com.framegen.core.FramePacer.getInstance().reset();
         });
 

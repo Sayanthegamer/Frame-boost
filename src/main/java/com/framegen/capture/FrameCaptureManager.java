@@ -16,6 +16,8 @@ public class FrameCaptureManager {
 
     private TextureTarget currentFrameFBO;
     private TextureTarget previousFrameFBO;
+    private TextureTarget currentPostHandFBO;
+    private TextureTarget previousPostHandFBO;
     private TextureTarget intermediateFrameFBO;
     private TextureTarget hudCompositeFBO;
     private TextureTarget entityMaskFBO;
@@ -24,8 +26,10 @@ public class FrameCaptureManager {
     private int height = 0;
     private long frameIndex = 0;
     private boolean hasPreviousFrame = false;
+    private boolean hasPreviousPostHandFrame = false;
     private boolean ready = false;
     private volatile boolean capturedThisFrame = false;
+    private volatile boolean capturedPostHandThisFrame = false;
 
     public FrameCaptureManager() {
     }
@@ -47,6 +51,7 @@ public class FrameCaptureManager {
             this.height = targetHeight;
             this.ready = true;
             this.hasPreviousFrame = false;
+            this.hasPreviousPostHandFrame = false;
 
             try {
                 if (RenderSystem.isOnRenderThread() && RenderSystem.tryGetDevice() != null) {
@@ -63,16 +68,19 @@ public class FrameCaptureManager {
     private void recreateBuffers() {
         destroyBuffers();
         this.hasPreviousFrame = false;
+        this.hasPreviousPostHandFrame = false;
 
         try {
             currentFrameFBO = new TextureTarget("framegen_current", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
             previousFrameFBO = new TextureTarget("framegen_previous", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
+            currentPostHandFBO = new TextureTarget("framegen_post_hand_current", width, height, GpuFormat.RGBA8_UNORM, null);
+            previousPostHandFBO = new TextureTarget("framegen_post_hand_previous", width, height, GpuFormat.RGBA8_UNORM, null);
             intermediateFrameFBO = new TextureTarget("framegen_intermediate", width, height, GpuFormat.RGBA8_UNORM, null);
             hudCompositeFBO = new TextureTarget("framegen_hud_composite", width, height, GpuFormat.RGBA8_UNORM, null);
             entityMaskFBO = new TextureTarget("framegen_entity_mask", width, height, GpuFormat.RGBA8_UNORM, null);
             if (RenderSystem.isOnRenderThread() && RenderSystem.tryGetDevice() != null && entityMaskFBO.getColorTexture() != null) {
                 CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-                encoder.clearColorTexture(entityMaskFBO.getColorTexture(), new org.joml.Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
+                encoder.clearColorTexture(entityMaskFBO.getColorTexture(), new org.joml.Vector4f(0.5f, 0.5f, 0.0f, 0.0f));
                 encoder.submit();
             }
         } catch (Throwable t) {
@@ -120,13 +128,52 @@ public class FrameCaptureManager {
         return false;
     }
 
+    /**
+     * Phase 3: Captures mainRenderTarget immediately after GameRenderer.render3dHud() (3D World + 3D Hand,
+     * prior to 2D GUI and screen vignette), enabling exact 3D viewmodel isolation and T=0.5 hand interpolation.
+     */
+    public synchronized boolean capturePostHandFrame(RenderTarget sourceTarget) {
+        if (sourceTarget == null || sourceTarget.width <= 0 || sourceTarget.height <= 0) {
+            return false;
+        }
+
+        ensureDimensions(sourceTarget.width, sourceTarget.height);
+
+        try {
+            if (currentPostHandFBO != null && sourceTarget.getColorTexture() != null && currentPostHandFBO.getColorTexture() != null) {
+                CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+                encoder.copyTextureToTexture(
+                        sourceTarget.getColorTexture(),
+                        currentPostHandFBO.getColorTexture(),
+                        0,
+                        0, 0,
+                        0, 0,
+                        width, height
+                );
+                encoder.submit();
+                this.capturedPostHandThisFrame = true;
+                return true;
+            }
+        } catch (Throwable t) {
+            LOGGER.error("Error capturing post-hand frame texture", t);
+        }
+        return false;
+    }
+
     public synchronized void advanceFrame() {
         if (ready) {
-            // Swap previous and current buffers
+            // Swap previous and current world buffers
             if (currentFrameFBO != null && previousFrameFBO != null) {
                 TextureTarget temp = previousFrameFBO;
                 previousFrameFBO = currentFrameFBO;
                 currentFrameFBO = temp;
+            }
+            // Swap previous and current post-hand buffers
+            if (currentPostHandFBO != null && previousPostHandFBO != null && capturedPostHandThisFrame) {
+                TextureTarget tempHand = previousPostHandFBO;
+                previousPostHandFBO = currentPostHandFBO;
+                currentPostHandFBO = tempHand;
+                hasPreviousPostHandFrame = true;
             }
             hasPreviousFrame = true;
             frameIndex++;
@@ -141,10 +188,24 @@ public class FrameCaptureManager {
         this.capturedThisFrame = capturedThisFrame;
     }
 
+    public boolean isCapturedPostHandThisFrame() {
+        return capturedPostHandThisFrame;
+    }
+
+    public void setCapturedPostHandThisFrame(boolean capturedPostHandThisFrame) {
+        this.capturedPostHandThisFrame = capturedPostHandThisFrame;
+    }
+
+    public boolean hasPreviousPostHandFrame() {
+        return hasPreviousPostHandFrame;
+    }
+
     public synchronized void reset() {
         hasPreviousFrame = false;
+        hasPreviousPostHandFrame = false;
         frameIndex = 0;
         capturedThisFrame = false;
+        capturedPostHandThisFrame = false;
     }
 
     public synchronized void destroy() {
@@ -153,6 +214,7 @@ public class FrameCaptureManager {
         height = 0;
         ready = false;
         hasPreviousFrame = false;
+        hasPreviousPostHandFrame = false;
         frameIndex = 0;
     }
 
@@ -164,6 +226,14 @@ public class FrameCaptureManager {
         if (previousFrameFBO != null) {
             try { previousFrameFBO.destroyBuffers(); } catch (Throwable ignored) {}
             previousFrameFBO = null;
+        }
+        if (currentPostHandFBO != null) {
+            try { currentPostHandFBO.destroyBuffers(); } catch (Throwable ignored) {}
+            currentPostHandFBO = null;
+        }
+        if (previousPostHandFBO != null) {
+            try { previousPostHandFBO.destroyBuffers(); } catch (Throwable ignored) {}
+            previousPostHandFBO = null;
         }
         if (intermediateFrameFBO != null) {
             try { intermediateFrameFBO.destroyBuffers(); } catch (Throwable ignored) {}
@@ -205,6 +275,14 @@ public class FrameCaptureManager {
 
     public TextureTarget getPreviousFrameFBO() {
         return previousFrameFBO;
+    }
+
+    public TextureTarget getCurrentPostHandFBO() {
+        return currentPostHandFBO;
+    }
+
+    public TextureTarget getPreviousPostHandFBO() {
+        return previousPostHandFBO;
     }
 
     public TextureTarget getIntermediateFrameFBO() {

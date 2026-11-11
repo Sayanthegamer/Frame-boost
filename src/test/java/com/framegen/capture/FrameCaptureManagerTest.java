@@ -20,7 +20,10 @@ class FrameCaptureManagerTest {
         assertThat(captureManager.getHeight()).isEqualTo(0);
         assertThat(captureManager.isReady()).isFalse();
         assertThat(captureManager.hasPreviousFrame()).isFalse();
+        assertThat(captureManager.hasPreviousPostHandFrame()).isFalse();
         assertThat(captureManager.getEntityMaskFBO()).isNull();
+        assertThat(captureManager.getCurrentPostHandFBO()).isNull();
+        assertThat(captureManager.getPreviousPostHandFBO()).isNull();
     }
 
     @Test
@@ -38,6 +41,7 @@ class FrameCaptureManagerTest {
         assertThat(captureManager.getWidth()).isEqualTo(2560);
         assertThat(captureManager.getHeight()).isEqualTo(1440);
         assertThat(captureManager.hasPreviousFrame()).isFalse();
+        assertThat(captureManager.hasPreviousPostHandFrame()).isFalse();
     }
 
     @Test
@@ -56,11 +60,14 @@ class FrameCaptureManagerTest {
     @Test
     void testReset() {
         captureManager.ensureDimensions(800, 600);
+        captureManager.setCapturedPostHandThisFrame(true);
         captureManager.advanceFrame();
         assertThat(captureManager.hasPreviousFrame()).isTrue();
 
         captureManager.reset();
         assertThat(captureManager.hasPreviousFrame()).isFalse();
+        assertThat(captureManager.hasPreviousPostHandFrame()).isFalse();
+        assertThat(captureManager.isCapturedPostHandThisFrame()).isFalse();
         assertThat(captureManager.getFrameIndex()).isEqualTo(0);
     }
 }

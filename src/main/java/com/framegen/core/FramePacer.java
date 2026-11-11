@@ -11,6 +11,8 @@ import com.mojang.renderpearl.api.device.GpuSurface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 public class FramePacer {
@@ -100,9 +102,11 @@ public class FramePacer {
                         ? String.format(Locale.ROOT, "%.3f ms", reprojectionTimeMs)
                         : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
                 float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
+                int movingEntities = EntityVelocityTracker.getInstance().getActiveMovingEntityCount();
+                String flowPreset = FrameGenConfig.getInstance().getOpticalFlowPresetLabel();
                 LOGGER.info(String.format(Locale.ROOT,
-                        "[FrameGen Telemetry Probe] Base: %.1f FPS | Eff: %.1f Hz | CPU work: %.2f ms | Reproject: %s | Omega: %.1f deg/s | Gated: %b | SynthOk: %b",
-                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, angularVel, lastFrameGated, lastSynthesisSuccess));
+                        "[FrameGen Telemetry Probe] Base: %.1f FPS | Eff: %.1f Hz | CPU work: %.2f ms | Reproject: %s | Flow: %s | Omega: %.1f deg/s | EntMV: %d | Gated: %b | SynthOk: %b",
+                        baseFps, effectiveFps, cpuWorkTimeMs, timeStr, flowPreset, angularVel, movingEntities, lastFrameGated, lastSynthesisSuccess));
             }
         }
     }
@@ -166,6 +170,20 @@ public class FramePacer {
                     LOGGER.info("[DebugSkipRender] Skipping shaderPass.render to test if GL state pollution causes black screen.");
                     return;
                 }
+
+                // Phase 2: Compute and rasterize per-entity 3D motion vector quads into entityMaskFBO
+                if (entityMaskFBO != null && entityMaskFBO.getColorTexture() != null) {
+                    List<EntityVelocityTracker.EntityVelocityQuad> velocityQuads = config.isEntityMotionVectorsEnabled()
+                            ? EntityVelocityTracker.getInstance().computeVelocityQuads(matrixTracker, config.getEntityVelocityMaxUv())
+                            : Collections.emptyList();
+                    shaderPass.renderEntityVelocityMask(
+                            entityMaskFBO.getColorTexture(),
+                            mainTarget.width,
+                            mainTarget.height,
+                            velocityQuads
+                    );
+                }
+
                 boolean success = shaderPass.render(
                         currentFBO.getColorTexture(),
                         previousFBO.getColorTexture(),
@@ -181,7 +199,11 @@ public class FramePacer {
                         mainTarget.height,
                         config.getInterpolationFactor(),
                         config.getDepthDilationRadius(),
-                        config.isDebugLadderTintEnabled()
+                        config.isDebugLadderTintEnabled(),
+                        config.isOpticalFlowEnabled(),
+                        config.getOpticalFlowQualityMode(),
+                        config.getOpticalFlowSearchRadius(),
+                        config.getEntityVelocityMaxUv()
                 );
                 this.intermediateSynthesisSuccess = success;
             }
@@ -204,6 +226,9 @@ public class FramePacer {
 
         TextureTarget intermediateFBO = captureManager.getIntermediateFrameFBO();
         TextureTarget currentFBO = captureManager.getCurrentFrameFBO();
+        TextureTarget previousFBO = captureManager.getPreviousFrameFBO();
+        TextureTarget currPostHandFBO = captureManager.getCurrentPostHandFBO();
+        TextureTarget prevPostHandFBO = captureManager.getPreviousPostHandFBO();
         TextureTarget hudFBO = captureManager.getHudCompositeFBO();
 
         if (intermediateFBO == null || intermediateFBO.getColorTextureView() == null) {
@@ -213,16 +238,26 @@ public class FramePacer {
         try {
             TextureTarget targetToPresent = intermediateFBO;
 
-            // Composite HUD onto intermediate frame to eliminate UI flickering
+            // Phase 3 & 4: Composite T=0.5 3D First-Person Hand and static 2D GUI over intermediate world frame
             if (hudFBO != null && mainTarget != null && currentFBO != null &&
                     mainTarget.getColorTexture() != null && currentFBO.getColorTexture() != null) {
+                boolean useHandInterp = config.isViewmodelMotionInterpolationEnabled()
+                        && captureManager.isCapturedPostHandThisFrame()
+                        && captureManager.hasPreviousPostHandFrame()
+                        && currPostHandFBO != null && prevPostHandFBO != null && previousFBO != null;
+
                 boolean hudOk = shaderPass.compositeHud(
                         intermediateFBO.getColorTexture(),
                         mainTarget.getColorTexture(),
                         currentFBO.getColorTexture(),
+                        useHandInterp ? currPostHandFBO.getColorTexture() : null,
+                        useHandInterp ? prevPostHandFBO.getColorTexture() : null,
+                        useHandInterp ? previousFBO.getColorTexture() : null,
                         hudFBO.getColorTexture(),
                         mainTarget.width,
-                        mainTarget.height
+                        mainTarget.height,
+                        useHandInterp,
+                        config.getInterpolationFactor()
                 );
                 if (hudOk) {
                     targetToPresent = hudFBO;
@@ -253,14 +288,18 @@ public class FramePacer {
                 : String.format(Locale.ROOT, "%.2f ms", reprojectionTimeMs);
         String statusStr = lastFrameGated ? "§eGATED (SNAP)§r" : "§aACTIVE§r";
         float angularVel = CameraMatrixTracker.getInstance().getAngularVelocityDegPerSec();
+        int movingEntities = EntityVelocityTracker.getInstance().getActiveMovingEntityCount();
+        String flowPreset = FrameGenConfig.getInstance().getOpticalFlowPresetLabel();
         return String.format(
                 Locale.ROOT,
-                "§6[FrameGen 2x]§r Base: §a%.0f§r / §b%.0f Hz§r (CPU work: §e%.1fms§r) | Reproject (CPU): §e%s§r | Swap: §b1 (FIFO)§r | Omega: §b%.0f°/s§r | Status: %s",
+                "§6[FrameGen 2x]§r Base: §a%.0f§r / §b%.0f Hz§r (CPU work: §e%.1fms§r) | Reproject (CPU): §e%s§r | Flow: §b%s§r | Swap: §b1 (FIFO)§r | Omega: §b%.0f°/s§r | EntMV: §d%d§r | Status: %s",
                 baseFps,
                 effectiveFps,
                 cpuWorkTimeMs,
                 timeStr,
+                flowPreset,
                 angularVel,
+                movingEntities,
                 statusStr
         );
     }
@@ -319,12 +358,13 @@ public class FramePacer {
             return;
         }
         long targetEnd = System.nanoTime() + waitNanos;
-        // Park/sleep for the coarse portion (if > 1.5ms) to keep CPU low
-        long coarseNanos = waitNanos - 1_500_000L;
+        // Reserve a 3.5 ms spin margin so Windows timer resolution quantums (~4-15 ms on LockSupport.parkNanos)
+        // never overshoot short waits (< 3.5 ms) during sub-frame cadence pacing or unit tests.
+        long coarseNanos = waitNanos - 3_500_000L;
         if (coarseNanos > 0) {
             java.util.concurrent.locks.LockSupport.parkNanos(coarseNanos);
         }
-        // Fine-grained busy spin for terminal sub-millisecond precision
+        // Fine-grained busy spin for terminal precision
         while (System.nanoTime() < targetEnd) {
             Thread.onSpinWait();
         }

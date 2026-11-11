@@ -7,53 +7,20 @@
 [![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Frame Boost** is a high-performance, open-source **2x Frame Generation** mod for Minecraft Java Edition (Fabric Loader, Blaze3D / OpenGL 3.3+). It doubles perceived visual fluidity and camera motion smoothness by synthesizing and interleaving an intermediate frame ($T = 0.5$) between base engine frames using **Camera Motion Reprojection** and **Depth Buffer Unprojection**.
+**Frame Boost (`v1.2.0`)** is a high-performance, open-source **2x Frame Generation** mod for Minecraft Java Edition (Fabric Loader, Blaze3D / OpenGL 3.3+). It doubles perceived visual fluidity across the **3D world, moving entities, particles, and first-person hand/viewmodel** by synthesizing and interleaving an intermediate frame ($T = 0.5$) between base engine frames.
 
-Unlike proprietary vendor solutions (DLSS 3, FSR 3) or heavy neural network models, Frame Boost runs pure GLSL fragment shaders with sub-millisecond overhead (~0.15–0.19 ms)—working natively across **NVIDIA, AMD, Intel, and Apple Silicon GPUs** with zero hardware lock-in.
-
----
-
-## ✨ Features
-
-- **⚡ True 2x Visual Fluidity:** Interleaves an intermediate reprojected frame at $T = 0.5$ between every base game frame.
-- **🌐 Hardware-Agnostic:** Pure OpenGL 3.3+ Core Profile shader pipeline. No tensor cores, optical flow accelerators, or RTX/RDNA requirements.
-- **📐 3D World Depth Reprojection:** Unprojects Blaze3D depth buffers to 3D world space and reprojects them across camera rotations and translations with iterative depth refinement.
-- **🔄 Modern Reverse-Z Architecture:** Custom-tailored for Mojang's Reverse-Z depth buffer ($1.0 = \text{near}, 0.0 = \text{far}$) with far-plane sky tracking.
-- **🎯 Seamless HUD & Vignette Compositing:** Dual-pass post-processing with continuous luminance tracking and smoothstep chromatic isolation. Crosshairs, hotbars, text, hearts, and screen vignettes render crisp with zero outline artifacts or flickering.
-- **💡 100% Fullbright & Lightmap Compatible:** Operates downstream of terrain and block lighting, preserving all gamma tweaks, Night Vision, and lighting mods transparently.
-- **🛡️ Zero DWM Desktop Bleed & Alpha Sanitization:** Hardware-masked alpha clearing (`A = 1.0`) across `mainRenderTarget` and default swapchain `FBO 0`, permanently preventing Windows 11 DWM, Windhawk, or translucent window compositors from bleeding desktop wallpapers through unrendered sky and fog.
-- **🌌 Nether & End Divergence Damping:** Smoothstep chromatic divergence ramp on unprojected sky pixels eliminates 50% opacity ghosting on Nether ash particles, End portal beacons, and dynamic celestial edges.
-- **🖥️ GUI-Aware Frame Pacing:** Intelligently pauses intermediate 3D frame generation while inventories, chat, or pause menus are open, keeping background menu blur stable and mouse input crisp.
-- **📊 Real-time F3 Telemetry:** Displays base FPS, output refresh rate, CPU render work time, and reprojection shader duration directly in the F3 screen.
+Unlike proprietary vendor solutions (DLSS 3, FSR 3) or heavy neural network models, Frame Boost runs pure GLSL fragment shaders with sub-millisecond overhead—working natively across **NVIDIA (including mobile MX-series), AMD, Intel, and Apple Silicon GPUs** with zero hardware lock-in.
 
 ---
 
-## 💡 How It Works & Architecture
+## ✨ Features (Full 4-Phase Architecture)
 
-Frame Boost implements **Camera Motion Reprojection** (conceptually similar to VR Asynchronous Timewarp and driver-level frame pacing):
-
-1. **World & Depth Capture:** Before hand and GUI rendering, the mod intercepts the 3D world color buffer and the Reverse-Z depth buffer.
-2. **Camera Quaternion Slerp:** The camera orientation between consecutive frames is smoothly interpolated at midpoint $T = 0.5$ using quaternion spherical linear interpolation (`slerp`).
-3. **Midpoint Shader Reprojection:** The fragment shader reconstructs 3D world coordinates for each pixel and reprojects them into the midpoint camera view.
-4. **HUD & Viewmodel Compositing:** A dedicated second pass blends the 2D interface (crosshair, chat, hotbar, text) and screen vignette over the reprojected frame.
-
-> [!NOTE]
-> **Static World vs. Mob Animations:**
-> Because Frame Boost reprojects based on camera matrices and depth, the entire static 3D world (blocks, terrain, sky, lighting) renders at full 2x fluidity. Moving entities (mobs, animals, items) and their skeletal animations update at the base engine frame rate.
-
----
-
-## ⚡ Recommended Settings & Low-Latency Guide
-
-To get the most responsive, lowest-latency experience:
-
-- **Turn V-Sync OFF in Minecraft:**  
-  Set **Options $\to$ Video Settings $\to$ VSync: OFF** and **Max Framerate: Unlimited** (or 120+ FPS).  
-  *Why?* With V-Sync ON (`FIFO`) on a 60Hz display, presenting both base and intermediate frames can force the engine loop down to 30 FPS, increasing mouse polling latency. Turning V-Sync off keeps mouse input fast and snappy!
-- **Ideal on High-Refresh Displays:**  
-  Frame Boost delivers an incredible experience on 120Hz, 144Hz, or 240Hz monitors, turning 60–75 base FPS into 120–144+ FPS fluid motion.
-- **Great for Heavy Shaders:**  
-  If shaders drop your GPU to 30–40 FPS, Frame Boost smooths camera panning up to 60–80 FPS visual fluidity.
+- **⚡ True 2x Visual Fluidity:** Interleaves an intermediate synthesized frame at $T = 0.5$ between every base game frame.
+- **📐 Phase 1A — 5-Tap Cross Reverse-Z Depth Dilation:** Locks onto foreground silhouettes in Mojang's Reverse-Z depth buffer ($1.0 = \text{near}, 0.0 = \text{far}$), eliminating sky bleed on thin geometry (fences, grass, leaves) while keeping refinement loops single-tap for high GPU memory bandwidth.
+- **🌊 Phase 1B — Temporal-Salience Symmetric Optical Flow (`F9` Presets):** Tracks non-rigid motion (particles, animated water/lava/fire) to $T = 0.5$ while bypassing aligned static terrain (`bestRawCost <= 0.025`) and enforcing temporal motion salience so stationary foliage and clouds never shimmer.
+- **🏃 Phase 2 — Depth-Occluded Per-Entity 3D Motion Vectors:** Tracks moving mobs, players, and projectiles in 3D world space, subtracts rigid camera motion to isolate pure entity velocity $(\Delta u_{\text{res}}, \Delta v_{\text{res}})$, and performs per-pixel Reverse-Z depth occlusion culling (`dMid <= entityDepth + tolerance`) so underground cave mobs never warp foreground trees or sky.
+- **🗡️ Phase 3 & 4 — 3-Layer World / Viewmodel / GUI Separation & $T = 0.5$ Hand Interpolation:** Captures the post-`render3dHud` buffer before 2D GUI rendering to isolate the 3D first-person hand from crosshairs/hotbars, synthesizing smooth $T = 0.5$ weapon swings and viewmodel bobbing over the unoccluded $T = 0.5$ world background.
+- **📊 Real-time F3 Telemetry:** Displays base FPS, effective Hz, CPU work time, reprojection duration, active flow preset (`Flow: PERF / QUAL / OFF`), angular velocity (`Omega`), and tracked moving entity count (`EntMV`).
 
 ---
 
@@ -61,11 +28,9 @@ To get the most responsive, lowest-latency experience:
 
 | Default Key | Action | Description |
 | :--- | :--- | :--- |
-| **`G`** | **Toggle Frame Generation** | Instantly enable or disable 2x frame generation at runtime. |
-| **`H`** | **Toggle Status Overlay** | Show or hide the on-screen Frame Boost active indicator. |
-| **`F3`** | **Debug Telemetry** | View base FPS, effective Hz, CPU work time, and reprojection latency. |
-
-Keybindings can be customized under **Options -> Controls -> Key Binds -> Frame Boost**.
+| **`F8`** | **Toggle Frame Generation** | Instantly enable or disable 2x frame generation at runtime. |
+| **`F9`** | **Cycle Optical Flow Preset** | Switch live between **`PERFORMANCE`** (4-Tap Fast MX330 Mode), **`QUALITY`** (12-Tap Ultra Mode), and **`OFF`** (Camera + Entity MV Only). |
+| **`F3`** | **Debug Telemetry** | View base FPS, effective Hz, active flow preset, entity MV count, and gating status. |
 
 ---
 
@@ -84,6 +49,12 @@ Configuration is automatically saved to `.minecraft/config/framegen.json`:
   "maxTranslationVelocityThreshold": 50.0,
   "maxAbsoluteAngleThreshold": 15.0,
   "maxFrameDurationThresholdMs": 50.0,
+  "opticalFlowEnabled": true,
+  "opticalFlowQualityMode": 1,
+  "opticalFlowSearchRadius": 3.0,
+  "entityMotionVectorsEnabled": true,
+  "entityVelocityMaxUv": 0.125,
+  "viewmodelMotionInterpolationEnabled": true,
   "cadencePacingEnabled": false,
   "debugLadderTintEnabled": false
 }
@@ -91,45 +62,13 @@ Configuration is automatically saved to `.minecraft/config/framegen.json`:
 
 ---
 
-## 📋 Requirements
+## 🛠️ Building & Auditing
 
-- **Minecraft:** `26.3`
-- **Mod Loader:** [Fabric Loader](https://fabricmc.net/) `0.19.5` or higher
-- **Library:** [Fabric API](https://modrinth.com/mod/fabric-api)
-- **Java:** `Java 25` or higher
-- **Graphics:** OpenGL 3.3+ Core Profile compatible GPU
-
----
-
-## 🛠️ Building from Source
+See [ANTIGRAVITY_AUDIT.md](ANTIGRAVITY_AUDIT.md) for the full automated audit prompt and in-game playtest checklist.
 
 ```bash
-# Clone the repository
-git clone https://github.com/Sayanthegamer/Frame-boost.git
-cd Frame-boost
-
-# Build with Gradle (Windows)
-.\gradlew.bat build
-
-# Build with Gradle (Linux / macOS)
-./gradlew build
+# Build and run all unit tests with Gradle (Windows)
+.\gradlew.bat clean check test build --no-daemon --warning-mode all
 ```
 
-Compiled mod JAR will be located in `build/libs/framegen-1.0.5.jar`.
-
----
-
-## 📥 Installation
-
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft `26.3`.
-2. Download [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft `26.3`.
-3. Drop `fabric-api.jar` and `framegen-1.0.5.jar` into your `.minecraft/mods` folder.
-4. Launch the game with the Fabric profile.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-Developed with ❤️ by **[Sayanthegamer](https://github.com/Sayanthegamer)**.
+Compiled mod JAR will be located in `build/libs/framegen-1.2.0.jar`.
